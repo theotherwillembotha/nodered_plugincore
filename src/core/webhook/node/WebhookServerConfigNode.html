@@ -1,0 +1,54 @@
+
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", { value:"Webhook Example", required:true})
+        .addDefault("port", { value:6644, required:true})
+        .addDefault("externalHost", { value:"localhost", required:true })
+        .addDefault("externalPort", { value:6644, required:true})
+        .addDefault("name", { value:"Example Test Node", required:true})
+        .setPaletteLabel("Webhook")
+        .setLabelStyle("node_label_white")
+        .setLabel(function() {return this.name })
+        .setColor("#0050E5")
+        .setInput("testInput")
+        .addOutputs("testOutput1","testOutput2","testOutput3")
+</script>
+
+<div template-section="onIncludeOnce">
+</div>
+
+
+<script type="text/html" template-section="onIncludeEditForm">\
+    <div id="WebhookServerConfig">
+        <div class="form-row">
+            <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+            <input type="text" id="node-config-input-name" />
+        </div>
+
+        <div class="form-row">
+            <label for="node-config-input-port"><i class="fa fa-tag"></i> Port</label>
+            <input type="number" id="node-config-input-port" />
+        </div>
+
+        <div class="form-row">
+            <label for="node-config-input-externalHost"><i class="fa fa-tag"></i> External Host</label>
+            <input type="text" id="node-config-input-externalHost" />
+        </div>
+
+        <div class="form-row">
+            <label for="node-config-input-externalPort"><i class="fa fa-tag"></i> External Port</label>
+            <input type="number" id="node-config-input-externalPort" />
+        </div>
+        <!-- add a button here to autmatically find an open port --> 
+    </div>
+
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+Configuration node for a webhook server.
+
+### Inputs
+: *name*        (string) : The common name for the webhook server integration.
+</script>
+
+

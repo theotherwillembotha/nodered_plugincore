@@ -1,0 +1,47 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", { value:"Metrics Example", required:true})
+        .addDefault("description", {value:"an example gauge", required:false})
+        .addDefault("reset", {value:false, required:false})
+        .setPaletteLabel("Gauge Metric Config")
+        .setLabel(function() {return this.name })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    // enable the metrics by default and hide the Enable metrics button.
+    let metricsEnabled = $("#node-config-input-metricsEnabled");
+    metricsEnabled.prop('checked', true);
+    metricsEnabled.trigger("change");
+    $("#section_metricsconfig").find(".metricsEnableCheck").hide();
+
+
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div id="MetricsConfig">
+        <div class="form-row">
+            <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+            <input type="text" id="node-config-input-name">
+        </div>
+
+        <div class="form-row">
+            <label for="node-config-input-description"><i class="fa fa-tag"></i> Description</label>
+            <input type="text" id="node-config-input-description">
+        </div>
+
+        <div class="form-row">
+            <input type="checkbox" id="node-config-input-reset" style="margin:8px 0 10px 102px; width:20px;">
+            <label style="width:auto" for="node-config-input-reset"><span>Reset on Deploy</span></label>
+        </div>
+    </div>
+</script>
+
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+Configuration node for the Gauge Metrics
+
+### Inputs
+: *name*        (string) : The common name for the gauge.
+: *description* (string) : A description for the given node
+
+</script>

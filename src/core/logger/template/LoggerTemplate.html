@@ -1,0 +1,328 @@
+<div template-section="onIncludeOnce">
+<style>
+  .editorgroupborder {
+      border-width:1px;
+      border-style:solid;
+      border-color:lightgray;
+      padding: 3px;
+      margin-top: 2px;
+      margin-bottom: 2px;
+  }
+
+  .editorsectionheading {
+      font-weight: 600;
+      margin-bottom:1px !important; 
+      margin-top:6px !important; 
+  }
+
+  .nomargin {
+      margin-bottom:1px !important; 
+      margin-top:1px !important; 
+  }
+
+  .slidecontainer {
+    width: 100%;
+  }
+
+  .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 25px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.7;
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+  }
+  
+  .slider:hover {
+    opacity: 1;
+  }
+  
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 25px;
+    height: 25px;
+    background: #04AA6D;
+    cursor: pointer;
+  }
+  
+  .slider::-moz-range-thumb {
+    width: 25px;
+    height: 25px;
+    background: #04AA6D;
+    cursor: pointer;
+  }
+
+    .towb_editorlabel {
+        width: 120px !important;
+    }
+    .towb_editorfield {
+        width: 70% !important;
+    }
+    .towb_editorfield_short {
+        width: 30% !important;
+    }
+
+</style>
+
+<script type="text/javascript">
+
+    // CSS
+    dropdownStyles = `
+    .loggertype-dropdown {
+        position: absolute;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        max-height: 150px;
+        overflow-y: auto;
+        z-index: 1000;
+        min-width: 150px;
+    }
+    .loggertype-dropdown .dropdown-item {
+        padding: 6px 12px;
+        cursor: pointer;
+    }
+    .loggertype-dropdown .dropdown-item:hover {
+        background: #f0f0f0;
+    }
+    `;
+    $('<style>').text(dropdownStyles).appendTo('head');
+
+</script>
+
+
+</div>
+
+
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("logEnabled", { value:false, required:true})
+        .addDefault("logger", { required:false})
+        .addDefault("logTemplateOverrideEnabled",  {value:false})
+        .addDefault("logTemplateOverride", {value:"message:{{msg}}"})
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    let node = this;
+
+    // controls.
+    let logEnabled = $("#{{defaults.logEnabled}}");
+    let logTemplateEnabled = $("#{{defaults.logTemplateOverrideEnabled}}");
+    let logTemplateEnabledSection = $("#section_logTemplateOverrideEnabled");
+    let logEnabledSection = $("#section_logEnabled");
+
+    // functions.
+    let getLoggerTypes = async function(){
+        let types = [];
+        await $.ajax({
+            url: "nodetypeservice/find?tag=LoggerType",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            data:JSON.stringify({id:node.id}),
+            success: (response) => {
+                types = response;
+            },
+            error: (jqXHR, textStatus, errorThrown) => {
+                console.log(jqXHR, textStatus, errorThrown);
+            },
+        });
+        return types;
+    }
+
+    let getLoggers = async () => {
+        let loggers = [];
+
+        // get the list of types again.
+        let loggerTypes = (await getLoggerTypes()).map(type => type.id);
+
+        // add all of the known loggers.
+        RED.nodes.eachConfig(cfg => { 
+            if(loggerTypes.includes(cfg.type)){
+                loggers.push({id:cfg.id, name:cfg.label(), type:cfg.type});
+            }
+        });
+
+        return loggers;
+    };
+
+    let updateLoggerSelectorList = async () => {
+        loggerSelector.empty();      
+        (await getLoggers()).forEach(logger => {
+            $('<option value="' + logger.id + '">' + logger.name + '</option>').appendTo(loggerSelector);
+        });
+        $('<option value="_ADD_">none</option>').appendTo(loggerSelector);
+    }
+
+    logEnabled.on('change', function() {
+        if(logEnabled.prop("checked")){
+            logEnabledSection.show();
+            node._def.defaults.logger.required = true;
+        }
+        else{
+            logEnabledSection.hide()
+            node._def.defaults.logger.required = false;
+        }
+    });
+
+    logTemplateEnabled.on('change', function() {
+        if(logTemplateEnabled.prop("checked")){
+            logTemplateEnabledSection.show();
+            node._def.defaults.logTemplateOverride.required = true;
+        }
+        else{
+            logTemplateEnabledSection.hide()
+            node._def.defaults.logTemplateOverride.required = false;
+        }
+    });
+
+    node.logTemplateOverrideEditor = RED.editor.createEditor({
+        id: 'node-input-logTemplateOverrideEditor',
+        mode: 'ace/mode/handlebars',
+        value: node.logTemplateOverride
+    });
+
+    let loggerSelector = $("#{{defaults.logger}}");
+    let loggerEditButton = $("#logger-edit-btn");
+    let loggerAddButton = $("#logger-add-btn");
+
+
+    loggerEditButton.on('click', async function(event){
+        event.stopPropagation();
+        if(loggerEditButton.hasClass("disabled")){
+            return;
+        }
+
+        // figure out what type of logger this is.
+        let selectedLogger = (await getLoggers()).find(logger => logger.id === loggerSelector.val());
+        RED.editor.editConfig("#{{defaults.logger}}", selectedLogger.type, selectedLogger.id);
+    });
+
+    loggerAddButton.on('click', function(event) {
+        event.stopPropagation();
+        let $btn = $(event.target);
+
+        // Remove any existing dropdown
+        $('.loggertype-dropdown').remove();
+
+        getLoggerTypes().then(loggerTypes => {
+            let $dropdown = $('<div class="loggertype-dropdown red-ui-editor"></div>');
+
+            loggerTypes.forEach(loggerType => {
+                $('<div class="dropdown-item"></div>')
+                .text(loggerType.name)
+                .data('value', loggerType.id)
+                .css({
+                    padding: '4px 8px',
+                    cursor: 'pointer'
+                })
+                .appendTo($dropdown);
+            });
+
+            // Position it near the button
+            $dropdown.css({
+                top:  $btn.offset().top + $btn.height(),
+                left: $btn.offset().left
+            });
+
+            $('body').append($dropdown);
+
+            $(document).on('mousedown.dropdown', function(e) {
+                if (!$(e.target).closest('.loggertype-dropdown').length) {
+                    $dropdown.remove();
+                    $(document).off('mousedown.dropdown'); // Clean up the listener
+                }
+            });
+
+            // Handle item selection
+            $dropdown.on('click', '.dropdown-item', function(e) {
+                e.stopPropagation();
+                const selectedValue = $(this).data('value');
+                const selectedText = $(this).text();
+
+                // Do whatever you need with the selection
+                console.log('Selected:', selectedValue, selectedText);
+                $dropdown.remove();
+                RED.editor.editConfig("#{{defaults.logger}}", selectedValue, "_ADD_");
+            });
+        })
+    });
+
+    loggerSelector.on("focus", updateLoggerSelectorList);
+    loggerSelector.on('change', function(event) {
+        if("_ADD_" === loggerSelector.val()){
+            loggerEditButton.addClass("disabled")
+        }
+        else{
+            loggerEditButton.removeClass("disabled")
+        }
+    });
+    
+    // lastly, make sure that we set the correct value on the logger selector.
+    updateLoggerSelectorList().then(() => {
+        loggerSelector.val(node.logger);
+    });
+
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+    node = this;
+    node.logTemplateOverride = node.logTemplateOverrideEditor.getValue();
+    node.logTemplateOverrideEditor.destroy();
+    delete node.logTemplateOverrideEditor;
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div id="section_loggerconfig" >
+        <div class="form-row editorsectionheading">
+            <i class="w-16 fa fa-eye"></i> <span>Logging</span>
+        </div>
+        <div class="editorgroupborder">
+            <div class="form-row nomargin logEnableCheck">
+                <input type="checkbox" id="{{defaults.logEnabled}}" placeholder="logEnabled" value="false" style="margin:8px 0 10px 102px; width:20px;">
+                <label style="width:auto" for="{{defaults.logEnabled}}"><span>Enable Logging</span></label>
+            </div>
+
+            <div id="section_logEnabled">
+                <div class="form-row nomargin">
+                    <label for="{{defaults.logger}}">Logger</label>
+                    <div style="width: 70%; display: inline-flex;">
+                        <select id="{{defaults.logger}}" style="flex-grow: 1;" class="">
+                            <option value="_ADD_">none</option>
+                        </select>
+                        <a id="logger-edit-btn" class="red-ui-button disabled" style="margin-left: 10px;">
+                            <i class="fa fa-pencil"></i>
+                        </a>
+                        <a id="logger-add-btn" class="red-ui-button" style="margin-left: 10px;">
+                            <i class="fa fa-plus"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="form-row nomargin">
+                    <input type="checkbox" id="{{defaults.logTemplateOverrideEnabled}}" placeholder="" value="false" style="margin:8px 0 10px 102px; width:20px;">
+                    <label style="width:auto" for="{{defaults.logTemplateOverrideEnabled}}"><span>Override Template</span></label>
+                </div>
+
+                <div id="section_logTemplateOverrideEnabled">
+                    <div class="form-row">
+                        <label for="node-input-logTemplateOverrideEditor"><i class="fa fa-tag"></i> Template</label>
+                        <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-logTemplateOverrideEditor"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### Logging
+: *enable logging* (boolean)        : if checked, then the node will produce logging output to the specified logger.
+: *logger* (logconfig)              : the endppoint that the node will log events to.
+: *override template* (logconfig)   : if checked, a custom logging template can be provided for the log message.
+: *logger template* (mustache)      : a template in mustache format to generate a message for logging purposes (see LoggerConfig node for more information)
+</script>

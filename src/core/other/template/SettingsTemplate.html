@@ -1,0 +1,128 @@
+
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("settingsTimestamp", { value:0})
+</script>
+
+<div template-section="onIncludeOnce">
+    <script type="text/javascript">
+        getNodeSettings = function(nodeId, callback){
+            console.log("Rerieving settings for node id: " + nodeId);
+
+            $.ajax({
+                url: "utils/getNodeSettings" ,
+                type: "POST",
+                data: JSON.stringify({nodeId:nodeId}),
+                contentType: "application/json; charset=utf-8",
+                success: function (response) {
+                    callback(response.settings);
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    console.log(jqXHR);
+                }
+            });
+        }
+
+        handleNodeSettings = function(node){
+
+            // if "settingsTimestamp" is "0" then there shouldnt be any settings to retrieve.
+            if(node.settingsTimestamp === undefined || node.settingsTimestamp === 0){
+                console.log("settingstimestamp = 0. No settings to retrieve");
+                return;
+            }
+
+            // if "settingsTimestamp" is not "0", retieve the settings.
+            console.log("settingstimestamp != 0. Load settings");
+            getNodeSettings(node.id, settings => {
+                //console.log("settings retrieved: " + JSON.stringify(settings, null, 2));
+                // if the settings is undefined, it means that the node has not been persisted yet.
+                if(settings === undefined){
+                    console.log("no settings retrieved");
+                    return;
+                }
+
+                console.log("Settings timestamp: " + settings.settingsTimestamp);
+                console.log("Node timestamp: " + node.settingsTimestamp);
+
+                if(settings.settingsTimestamp !== node.settingsTimestamp){
+                    // if "settingsTimestamp" is different than the one that was returned by getSettings(), 
+                    // then dont replace the current values with settings.
+                    console.log("config timestamp different than settings timestamp. no update")
+                    return;
+                }
+
+                // TODO:
+                // if "settingsTimestamp" is the same as the one returned by getSettings(), then replace the config values with those from settings.
+                console.log("Replacing Settings");
+
+                // go through the defaults and find the elements and their types that are assigned to them.
+                let inputValueSetters = {
+                    "text" : (input, value) => { input.val(value) },
+                    "number" : (input, value) => { input.val(value) },
+                    "select-one" : (input, value) => { input.val(value) },
+                    "hidden" : (input, value) => { input.val(value) },
+                    "checkbox" : (input, value) => { input.val(value).prop("checked", value).trigger('change') },
+                    // todo: add the other types of inputs here.
+                };
+
+                let prefix = (node._def.category === "config") ? "#node-config-input-" : "#node-input-";
+                Object.keys(node._def.defaults)
+                    .filter(entry => settings.hasOwnProperty(entry))
+                    .forEach(entry => {
+                    try{
+                        // get the field.
+                        let field = $(prefix + entry);
+
+                        if(!field[0]){
+                            console.log("field " + (prefix + entry) + "[0] not found");
+                            return;
+                        }
+
+                        // get the setter for the field.
+                        let setValue = inputValueSetters[field[0].type];
+                        if(setValue){
+                            try{
+                                //console.log("setting " + prefix + entry + " to " + settings[entry]);
+                                setValue(field, settings[entry]);
+                            }
+                            catch(error){
+                                console.log(error);
+                            }
+                        }
+                        else{
+                            console.log("no setter for type: " + field[0].type + " (" + entry + ")")
+                        }
+                    }
+                    catch(error){
+                        console.log(error);
+                    }
+                })
+                return;
+            });
+        }
+    </script>    
+</div>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    handleNodeSettings(node);
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+    // set the value for "settingsTimestamp" to now() - this will ensure that values are not overwritten if the editor is opened again before a deploy.
+
+    // NOTE on ONDEPLOY on the server side: 
+    // when the deployment is being done and there are no settings, then this is a first deployment. Do the intialization and persist to settings (remember to include 'settingsTimestamp')
+    // when the deployment is being done and 'settingsTimestamp' from config is the same as 'settingsTimestamp' from settings, then nothing actually changed. its a redeployment
+    // when the deployment is being done and 'settingsTimestamp' from config is different from 'settingsTimestamp' from settings then its an update. (save to settings + include settingsTimestap)
+    $("#node-config-input-settingsTimestamp").val(new Date().getTime());
+    $("#node-input-settingsTimestamp").val(new Date().getTime());
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <input type="hidden" id="node-config-input-settingsTimestamp" />
+    <input type="hidden" id="node-input-settingsTimestamp" />
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+
+</script>

@@ -1,0 +1,405 @@
+
+
+<script type="text/javascript" template-section="onCompose">
+node
+    .addDefault('webhook', {type:"WebhookServerConfigNode", required:true})
+    .addDefault('webhookPath', {value:"/example", required:true})
+    .addDefault('webhookAuth', { value:"none", required:true})
+    .addDefault('webhookAuth_basic_username', {value:"user", required:false})
+    .addDefault('webhookAuth_basic_password', {value:"pass", required:false})
+    .addDefault('webhookAuth_apikey_mechanism', {value:"header", required:false})
+    .addDefault('webhookAuth_apikey_key', {value:"x-api-key", required:false})
+    .addDefault('webhookAuth_apikey_value', {value:"testkey", required:false})
+    .addDefault('reverseProxies_enabled', {required:false})
+    .addDefault('reverseProxies_connections', { type:"ReverseProxyType[]", maxInstances:10})
+</script>
+
+<div template-section="onIncludeOnce">
+    <script type="text/javascript">
+
+        // CSS
+        dropdownStyles = `
+        .proxy-dropdown {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 1000;
+            min-width: 150px;
+        }
+        .proxy-dropdown .dropdown-item {
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        .proxy-dropdown .dropdown-item:hover {
+            background: #f0f0f0;
+        }
+        `;
+        $('<style>').text(dropdownStyles).appendTo('head');
+
+    </script>
+
+</div>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+{
+    let node = this;
+
+    let showSelectedAutnetication = function(value){
+        let webhookConfig = $("#section_webhookconfig");
+        webhookConfig.find(".webhookauth").each((i, t) => {
+            t = $(t);
+            if(t.hasClass(`webhookauth-${value}`)){ t.show(); }
+            else { t.hide(); }
+        });
+
+        webhookConfig.find(`.webhookauth-${value}`).find(`.webhookauth-${value}-input.required`).each((i, entry) => { 
+            let id = entry.id.replace("node-{{#if config.isConfigNode}}config-{{/if}}input-", "");
+            if(node._def.defaults[id]){
+                node._def.defaults[id].required = true;
+            }
+            else{
+                console.log(`you forgot to define ${id} in the defaults for WebhookTemplate`);
+            }
+        });
+
+        Object.entries(node._def.defaults)
+            .filter(([k, v]) => k.startsWith(`webhookAuth_`))
+            .filter(([k, v]) => !k.startsWith(`webhookAuth_${value}_`))
+            .forEach(([k, v]) => v.required = false );
+        
+        node.webhookAuth = value;
+    }
+
+    let webhookAuthSelection = $("#{{defaults.webhookAuth}}");
+    webhookAuthSelection.typedInput({type:"authentication", types:[{
+        value: "authentication",
+        options: [
+            { value: "none", label: "None"},
+            { value: "basic", label: "BasicAuth"},
+            { value: "apikey", label: "APIKey"}
+        ]
+    }]});
+    webhookAuthSelection.on("change", () => showSelectedAutnetication(webhookAuthSelection.val()));
+    showSelectedAutnetication(webhookAuthSelection.val());
+
+    let webhookAPIKeyMechanism = $("#{{defaults.webhookAuth_apikey_mechanism}}");
+    webhookAPIKeyMechanism.typedInput({type:"apikeymechanism", types:[{
+        value: "apikeymechansim",
+        options: [
+            { value: "header", label: "Header"},
+            { value: "queryparam", label: "Query Param"},
+            { value: "matrixparam", label: "Matrix Param"}
+        ]
+    }]});
+    webhookAuthSelection.on("change", () => showSelectedAutnetication(webhookAuthSelection.val()));
+    showSelectedAutnetication(webhookAuthSelection.val());
+
+    let enableReverseProxy = $("#{{defaults.reverseProxies_enabled}}");
+    let reverseProxySection = $("#section_webhookconfig_reverseproxy"); 
+    enableReverseProxy.on("change", () => {
+        console.log("show / hide reverse proxy table");
+        if(enableReverseProxy.prop("checked")){
+            reverseProxySection.show();
+        }
+        else{
+            reverseProxySection.hide();
+        }
+    });
+    if(this.reverseProxies_enabled){
+        reverseProxySection.show();
+    }
+    else{
+        reverseProxySection.hide();
+    }
+
+    let getProxyTypes = async () => {
+        let types = [];
+        await $.ajax({
+            url: "nodetypeservice/find?tag=ReverseProxyType",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            data:JSON.stringify({id:node.id}),
+            success: (response) => {
+                types = response;
+            },
+            error: (jqXHR, textStatus, errorThrown) => {
+                console.log(jqXHR, textStatus, errorThrown);
+            },
+        });
+        return types;
+    }
+
+    let getProxies = async () => {
+        let proxies = [];
+
+        // get the list of types again.
+        let proxyTypes = (await getProxyTypes()).map(type => type.id);
+
+        // add all of the known proxies.
+        RED.nodes.eachConfig(cfg => { 
+            if(proxyTypes.includes(cfg.type)){
+                proxies.push({id:cfg.id, name:cfg.label(), type:cfg.type});
+            }
+        });
+
+        return proxies;
+    };
+
+    let reverseProxyList = $("#reverseproxylist_table");
+    reverseProxyList.editableList({
+        sortable: true,
+        removable: true,
+        height: 'auto',
+        scrollOnAdd: true,
+        addButton: 'Add ProxyHost',
+        header: $('<div>').append($.parseHTML(`
+            <div style='width:30%; margin-left:5%; display:inline-grid;'>Proxy</div>
+            <div style='width:auto; margin-right:5%; display:inline-grid;'>Domain Name</div>
+            `)
+        ),
+        buttons: [
+        {
+            label: "Add Reverse Proxy",
+            icon: "fa fa-star",
+            title: "Add a reverse proxy configuration",
+            click: () => {
+                event.stopPropagation();
+                let $btn = $(event.target);
+
+                // Remove any existing dropdown
+                $('.proxy-dropdown').remove();
+
+                // Fetch the list of reverseproxy types.
+                getProxyTypes().then(proxyTypes => {
+                    let $dropdown = $('<div class="proxy-dropdown red-ui-editor"></div>');
+
+                    proxyTypes.forEach(proxyType => {
+                        $('<div class="dropdown-item"></div>')
+                            .text(proxyType.name)
+                            .data('value', proxyType.id)
+                            .css({
+                                padding: '4px 8px',
+                                cursor: 'pointer'
+                            })
+                            .appendTo($dropdown);
+                    });
+
+                    // Position it near the button
+                    $dropdown.css({
+                        top:  $btn.offset().top + $btn.height(),
+                        left: $btn.offset().left
+                    });
+
+                    $('body').append($dropdown);
+
+                    // Handle item selection
+                    $dropdown.on('click', '.dropdown-item', function(e) {
+                        e.stopPropagation();
+                        const selectedValue = $(this).data('value');
+                        const selectedText = $(this).text();
+
+                        // Do whatever you need with the selection
+                        $dropdown.remove();
+                        RED.editor.editConfig("reverseproxy", selectedValue, "_ADD_");
+                    });
+                })
+            },
+        },
+        {
+            label: "Edit Reverse Proxy",
+            icon: "fa fa-edit",
+            title: "Edit a reverse proxy configuration",
+            click: async (event) => {
+                event.stopPropagation();
+
+                // Remove any existing dropdown
+                $('.proxy-dropdown').remove();
+
+                // Build the dropdown from the select's options
+                const $dropdown = $('<div class="proxy-dropdown red-ui-editor"></div>');
+
+                (await getProxies()).forEach(proxy => {
+                    $('<div class="dropdown-item"></div>')
+                    .text(proxy.name)
+                    .data('value', proxy.id)
+                    .data('type', proxy.type)
+                    .css({
+                        padding: '4px 8px',
+                        cursor: 'pointer'
+                    })
+                    .appendTo($dropdown);
+                });
+
+                // Position it near the button
+                let $btn = $(event.target);
+                $dropdown.css({
+                    top: $btn.offset().top + $btn.height(),
+                    left: $btn.offset().left
+                });
+
+                $('body').append($dropdown);
+
+                // Handle item selection
+                $dropdown.on('click', '.dropdown-item', function(e) {
+                    e.stopPropagation();
+                    const selectedType = $(this).data('type');
+                    const selectedValue = $(this).data('value');
+                    const selectedText = $(this).text();
+
+                    // Do whatever you need with the selection
+                    $dropdown.remove();
+                    RED.editor.editConfig("reverseproxy", selectedType, selectedValue);
+                });
+            }
+        }],
+
+        addItem: async function(container, i, proxy){
+            let row =  $('<div/>', {
+                class: 'form-row',
+                style: 'display: flex; margin-bottom: 0;'
+            }).appendTo(container);
+
+            let proxyColumn = $('<select/>', {
+                type: 'text',
+                name: i,
+                required: true,
+                style: 'margin-left: 5px; margin-bottom: 0;',
+                class: 'proxy-proxy'
+            }).appendTo(row);
+
+            (await getProxies()).forEach(proxy => {
+                $('<option value="' + proxy.id + '">' + proxy.name + '</option>').appendTo(proxyColumn);
+            });
+
+            proxyColumn.on("focus", async () => {
+                proxyColumn.empty();
+                (await getProxies()).forEach(proxy => {
+                    $('<option value="' + proxy.id + '">' + proxy.name + '</option>').appendTo(proxyColumn);
+                })
+            });
+
+            proxyColumn.val(proxy.proxy);
+
+            // Add the Domain Name column
+            let domainnameColumn = $('<input/>', {
+                type: 'text',
+                name: i,
+                required: true,
+                style: 'margin-left: 5px; margin-bottom: 0;',
+                class: 'proxy-domainname'
+            }).appendTo(row)
+            domainnameColumn.val(proxy.domainname);
+        },
+        removeItem :function(data){
+            // nothing to do here.
+        },
+    });
+
+    // Close dropdown when clicking anywhere else
+    $(document).on('click', function() {
+        $('.proxy-dropdown').remove();
+    });
+
+    this.reverseProxies_connections = (this.reverseProxies_connections) ? this.reverseProxies_connections : [];
+    reverseProxyList.editableList('addItems', this.reverseProxies_connections);
+}
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+{
+    let node = this;
+
+    // pulling the values from the reverseproxy table.
+    let connectionList = $("#reverseproxylist_table").editableList('items');
+    node.reverseProxies_connections = [];
+    connectionList.each(function(i) {
+        node.reverseProxies_connections.push({
+            proxy: $(this).find('.proxy-proxy').val(),
+            domainname: $(this).find('.proxy-domainname').val(),
+        });
+    });
+
+    console.log(node.reverseProxies_connections);
+}
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div id="section_webhookconfig">
+        <div class="form-row editorsectionheading">
+            <i class="w-16 fa fa-eye"></i> <span>Webhook</span>
+        </div>
+        
+        <div class="editorgroupborder">
+            <div class="form-row nomargin">
+                <label for="{{defaults.webhook}}">Server</label>
+                <input id="{{defaults.webhook}}" placeholder="webhook" />
+            </div>
+            
+            <div class="form-row">
+                <label for="{{defaults.webhookPath}}">Path</label>
+                <input type="text" id="{{defaults.webhookPath}}" placeholder="/example" />
+            </div>
+
+            <div class="form-row">
+                <label for="{{defaults.webhookAuth}}">Authentication</label>
+                <input type="text" id="{{defaults.webhookAuth}}" placeholder="none" />
+            </div>
+
+            <div class="webhookauth webhookauth-none">
+            </div>
+
+            <div class="webhookauth webhookauth-basic">
+                <div class="form-row">
+                    <label for="{{defaults.webhookAuth_basic_username}}">Auth Username:</label>
+                    <input type="text" id="{{defaults.webhookAuth_basic_username}}" placeholder="testUser" />
+                </div>
+
+                <div class="form-row">
+                    <label for="{{defaults.webhookAuth_basic_password}}">Auth Password:</label>
+                    <input type="password" id="{{defaults.webhookAuth_basic_password}}" placeholder="password" />
+                </div>
+            </div>
+
+            <div class="webhookauth webhookauth-apikey">
+                <div class="form-row">
+                    <label for="{{defaults.webhookAuth_apikey_mechanism}}">APIKey Mechanism:</label>
+                    <input type="text" id="{{defaults.webhookAuth_apikey_mechanism}}"/>
+                </div>
+
+                <div class="form-row">
+                    <label for="{{defaults.webhookAuth_apikey_key}}">APIKey Key:</label>
+                    <input type="text" id="{{defaults.webhookAuth_apikey_key}}" placeholder="x-api-key" />
+                </div>
+
+                <div class="form-row">
+                    <label for="{{defaults.webhookAuth_apikey_value}}">APIKey Value</label>
+                    <input type="text" id="{{defaults.webhookAuth_apikey_value}}" placeholder="testvalue" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="margin:8px 0 10px 102px; width:20px;" />
+                <label style="width:auto" for="{{defaults.reverseProxies_enabled}}"><span>Enable Reverse Proxy</span></label>
+            </div>
+
+            <div id="section_webhookconfig_reverseproxy" style="display:none">
+                <div class="form-row">
+                    <span>
+                        <ol id="reverseproxylist_table" class="theotherwillembotha-compact-table"></ol>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</script>
+
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### Logging
+: *enable logging* (boolean) : if checked, then the node will produce logging output to the specified logger.
+: *webhook* (webhook) : the webhook Server / port that this webhook will be attached to.
+</script>

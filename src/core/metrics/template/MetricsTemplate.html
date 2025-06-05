@@ -1,0 +1,54 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("metricsEnabled", { value:false, required:true})
+        .addDefault("metricsReference", {type:"MetricsConfigNode", required:false})
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    let node = this;   
+
+    let metricsEnabled = $("#{{defaults.metricsEnabled}}");
+    let metricsEnabledSection = $("#section_metricsEnabled");
+
+    metricsEnabled.on('change', function() {
+        if(metricsEnabled.prop("checked")){
+            metricsEnabledSection.show();
+            node._def.defaults.metricsReference.required = true;
+        }
+        else{
+            metricsEnabledSection.hide()
+            node._def.defaults.metricsReference.required = false;
+        }
+    });
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+ 
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div id="section_metricsconfig">
+        <div class="form-row editorsectionheading">
+            <i class="w-16 fa fa-eye"></i> <span>Metrics</span>
+        </div>
+        <div class="editorgroupborder">
+            <div class="form-row nomargin metricsEnableCheck">
+                <input type="checkbox" id="{{defaults.metricsEnabled}}" value="false" style="margin:8px 0 10px 102px; width:20px;" />
+                <label style="width:auto" for="{{defaults.metricsEnabled}}"><span>Enable Metrics</span></label>
+            </div>
+
+            <div id="section_metricsEnabled">
+                <div class="form-row nomargin">
+                    <label class="towb_editorlabel" for="{{defaults.metricsReference}}">Metric Collector</label>
+                    <input id="{{defaults.metricsReference}}" placeholder="metrics" />
+                </div>
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### Metrics
+: *enable metrics* (boolean) : if checked, then the node will produce metrics output to the specified metrics provider.
+: *metric collector* (metricconfig) : the collection point or grouping where this particular metric will be attached.
+</script>

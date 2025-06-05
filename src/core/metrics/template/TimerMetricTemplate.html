@@ -1,0 +1,59 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("timerConfig", { type:"TimerMetricConfigNode", required: true })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    $.ajax({
+        url: "metricsservice/config",
+        type: "GET",
+        contentType: "application/json; charset=utf-8",
+        success: (response) => {
+            $("#section_timermetricconfig").show();
+            $("#section_timermetricconfig_disabled").hide();
+        },
+        error: (jqXHR, textStatus, errorThrown) => {
+            // do nothing.
+            console.log(jqXHR, textStatus, errorThrown);
+        }
+    });
+
+    let metricsEnabled = $("#node-{{#if config.isConfigNode}}config-{{/if}}input-metricsEnabled");
+    let metricsEnabledSection = $("#section_metricsEnabled");
+
+    metricsEnabled.on('change', function() {
+        if(metricsEnabled.prop("checked")){
+            metricsEnabledSection.show();
+            node._def.defaults.metricsReference.required = true;
+        }
+        else{
+            metricsEnabledSection.hide()
+            node._def.defaults.metricsReference.required = false;
+        }
+    });
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+ 
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+
+    <div id="section_timermetricconfig" style="display:none;">
+        <div class="form-row">
+            <label for="node-input-timerConfig"><i class="fa fa-tag"></i> Timer</label>
+            <input type="text" id="node-input-timerConfig" />
+        </div>
+    </div>
+    <div id="section_timermetricconfig_disabled">
+        <div class="form-row">
+            <span>It looks like the metrics core plugin is not installed.</span><br/>
+            <span>Metrics Functionality will be unavialable</span>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+    ### Timer
+    : *timer* (timerconfig) : tre trimer that will be incremented / decremented / observed every time the node is entered.
+</script>

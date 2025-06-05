@@ -1,0 +1,131 @@
+
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", {value:"Logger Example", required:true})
+        .addDefault("platform", {value:"rest", required:true})
+        .addDefault("template", {value:`message:{{msg}}`, required:true})
+        .addDefault("level", {value:"info", required:true})
+        .setPaletteLabel("Console Logger Config Node")
+        .setLabel(function() {return this.name })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+{
+    let node = this;
+
+    let levelSelection = $("#node-config-input-level");
+    levelSelection.typedInput({type:"level", types:[{
+        value: "level",
+        options: [
+            { value: "DEBUG", label: "debug"},
+            { value: "INFO", label: "info"},
+            { value: "WARNING", label: "warning"},
+            { value: "ERROR", label: "error"},
+        ]
+    }]});
+
+    this.editor = RED.editor.createEditor({
+        id: 'node-config-input-templateEditor',
+        mode: 'ace/mode/handlebars',
+        value: this.template
+    });
+}
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+{
+    let node = this;
+
+    this.template = this.editor.getValue();
+    this.editor.destroy();
+    delete this.editor;
+}
+
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+<div id="LoggerConfig">
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" />
+    </div>
+
+    <div class="form-row">
+        <label for="node-config-input-level"><i class="fa fa-tag"></i> Level</label>
+        <input type="text" id="node-config-input-level" />
+    </div>
+
+    <div class="form-row">
+        <label for="node-config-input-templateEditor"><i class="fa fa-tag"></i> Template</label>
+        <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-config-input-templateEditor"></div>
+    </div>
+</div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+Configuration node for the Logger Integration
+
+## Inputs
+: *name*    (string)    : The common name for the logger Configuration
+: *level*   (level)     : The logging level - debug, info, warning, error
+: *platform*(string)    : The common name for the logger Configuration
+: *template*(mustache)  : A template for the log messages.
+
+## Logger platform
+Currently supported logging platforms
+
+### Console
+The log message will be printed out to stdio
+
+### Http / Https
+Publish the message to an http endpoint using a http / https POST command.
+
+: *url*                 (url)           : The endpoint for the url where requests are to be posted to.
+: *ignore ssl errors*   (boolean)       : If enabled, the invalid ssl certificates will be ignored.
+: *authentication*      (auth method)   : what auth method should be used for the http request. (none, basic, api key)
+
+#### Authentication
+##### Basic
+Provides basic authentication using the Authorization header 
+
+: *username*    (string) : the username used for basic authentication
+: *password*    (string) : the password used for basic authentication
+
+##### APIKey
+Provides authentication using a matrix parameter, header or query parameter and an apikey
+
+: *mechanism*   (mechanism) : the mechanism that will be used for transmitting the key (header, queryparam, matrixparam)
+: *apikey name* (string)    : the name of the key used for api authentication. (path variable or query param name)
+: *apikey value*(string)    : the value of the api key that will be transmitted. (beware of special characters)
+
+### Loki
+Publish the message to a loki endpoint.
+
+: *host*        (string) : the host and port\ of the loki instance that it being logged to
+: *tenant*      (string) : the tenant id that will be used to log to
+: *username*    (string) : the username for the loki instance.
+: *authtoken*   (string) : the authtoken for the loki instance.
+
+# Mustache Templating
+Mustache / Handlebars are used for building up the logged message payloads that are sent to the logging backend.
+The resultant message will be interpreted as a string, meaning care should be taken in the event that a string representation of a json object is built.
+
+### Provided Properties
+A couple of values are provided to the logging context by default.
+
+: *msg*         (object)    : an object containing the payload or message that should be parsed through the template.
+: *currentTime* (object)    : a string containing the current time in ISO8601 format
+
+### Mustache Helpers
+In addition to the provided properties, some "helpers" have also been provided to assist in serialization.
+
+: *json*        (helper)    : converts a json object to a string using the JSON.stringify method.
+
+## Examples
+- {{{json msg}}} - serializes the the msg object to json format.
+
+# References
+- [Mustache - Wikipedia](https://en.wikipedia.org/wiki/Mustache_(template_system))
+- [Mustache - Playground](https://jgonggrijp.gitlab.io/wontache/playground.html)
+</script>
+
