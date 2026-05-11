@@ -88,7 +88,7 @@ export class LoggerConfigNode extends ConfigNode<LoggerConfigNodeConfig> {
             "config", 
             "LoggerConfigNode",
             SourceUtility.getSourcePath("/build/", "/src/") + "LoggerConfigNode.html",
-            "@theotherwillembotha/nodered_plugincore")
+            "@theotherwillembotha/node-red-plugincore")
         .addDependency(LoggerService)
         .addTag("Core")
     }

@@ -203,7 +203,7 @@ export class WebhookServerService extends BaseService {
             "@theotherwillembotha/webhookserverservice",
             "WebhookServerService",
             "services-plugin",
-            "@theotherwillembotha/nodered_plugincore",
+            "@theotherwillembotha/node-red-plugincore",
             WebhookServerService,
             [WebhookServerConfigNode, WebhookTemplate]
         );

@@ -31,7 +31,6 @@ export * from "./core/other/service/InputService";
 export * from "./core/other/service/SettingsService";
 export * from "./core/other/template/BasicTemplate";
 export * from "./core/other/template/SettingsTemplate";
-export * from "./core/other/node/TestNode";
 
 // WEBHOOK
 export * from "./core/webhook/template/WebhookTemplate";

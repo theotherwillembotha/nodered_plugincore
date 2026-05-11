@@ -59,7 +59,7 @@ export class NodeTypeService extends BaseService {
             "@theotherwillembotha/nodetypeservice",
             "NodeTypeService",
             "services-plugin",
-            "@theotherwillembotha/nodered_plugincore",
+            "@theotherwillembotha/node-red-plugincore",
             NodeTypeService,
             []
         );

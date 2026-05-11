@@ -32,7 +32,7 @@ interface TimerMetricConfigNodeConfig extends ConfigNodeConfig, MetricsTemplateC
     name:"Timer Metric Config Node",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "TimerMetricConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     templates: [
         { template: MetricsTemplate, config: {isConfigNode:true}}
     ],

@@ -516,7 +516,7 @@ export class MetricsService extends BaseService {
       "@theotherwillembotha/metricsservice",
       "MetricsService",
       "services-plugin",
-      "@theotherwillembotha/nodered_plugincore",
+      "@theotherwillembotha/node-red-plugincore",
       MetricsService
     );
   }

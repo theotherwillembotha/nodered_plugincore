@@ -1,6 +1,6 @@
 {
-  "name": "@theotherwillembotha/nodered_plugincore",
-  "version": "0.0.41",
+  "name": "@theotherwillembotha/node-red-plugincore",
+  "version": "0.0.50",
   "description": "A TypeScript framework for building production-grade Node-RED plugins, with built-in logging, Prometheus metrics, and webhook support.",
   "author": "Willem Botha (@theotherwillembotha)",
   "license": "ISC",
@@ -28,6 +28,10 @@
   "types": "./build/index.d.ts",
   "files": ["build/", "src/", "icons/", "LICENSE", "README.md"],
   "homepage": "https://github.com/theotherwillembotha/nodered_plugincore#readme",
+  "engines": {
+    "node": ">=18",
+    "nodered": ">=4.0.0"
+  },
   "devDependencies": {
     "@types/deep-equal": "^1.0.4",
     "@types/js-beautify": "^1.14.3",

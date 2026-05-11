@@ -153,7 +153,7 @@ ${nodeHTMLOutut}
 ${NodeGenerator.warning}
 */
 "use strict";
-const NodeManager = require("@theotherwillembotha/nodered_plugincore").NodeManager;
+const NodeManager = require("@theotherwillembotha/node-red-plugincore").NodeManager;
 ${importList}
 module.exports = (RED) => {
 let manager = new NodeManager(RED);

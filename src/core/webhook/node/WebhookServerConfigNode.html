@@ -45,10 +45,17 @@
 </script>
 
 <script type="text/markdown" template-section="onIncludeDocumentation">
-Configuration node for a webhook server.
+Configuration node for an Express HTTP server that webhook nodes attach to. A single server instance is shared by all webhook nodes that reference it. The server is started when the flow is first deployed and stopped when it is torn down.
 
 ### Inputs
-: *name*        (string) : The common name for the webhook server integration.
+: *name*          (string) : A descriptive name for this webhook server.
+: *port*          (number) : The local port the HTTP server will listen on. Defaults to `6644`. Each server instance must use a unique port.
+
+### Reverse Proxy
+When this server sits behind a reverse proxy, configure the following fields so that webhook nodes know the externally-visible address. This is used when registering endpoints with a reverse proxy service.
+
+: *external host* (string) : The public hostname or IP of the reverse proxy (e.g. `myserver.example.com`).
+: *external port* (number) : The public port exposed by the reverse proxy.
 </script>
 
 

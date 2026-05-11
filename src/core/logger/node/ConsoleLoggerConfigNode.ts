@@ -17,7 +17,7 @@ interface ConsoleLoggerConfigNodeConfig extends ConfigNodeConfig {
     name:"Console Logger",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "ConsoleLoggerConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     dependencies:[ LoggerService ],
     tags: [ "LoggerType" ]
 })

@@ -17,7 +17,7 @@ interface GaugeMetricConfigNodeConfig extends ConfigNodeConfig, GaugeMetricConfi
     name:"Guage Metric Config Node",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "GaugeMetricConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     templates: [
         { template: MetricsTemplate, config: {}}
     ],

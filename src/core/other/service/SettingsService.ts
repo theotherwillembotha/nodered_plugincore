@@ -45,7 +45,7 @@ export class SettingsService extends BaseService {
             "@theotherwillembotha/settingsservice",
             "SettingsService",
             "services-plugin",
-            "@theotherwillembotha/nodered_plugincore",
+            "@theotherwillembotha/node-red-plugincore",
             SettingsService
         );
     }

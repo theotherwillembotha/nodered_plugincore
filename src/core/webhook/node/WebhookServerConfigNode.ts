@@ -17,7 +17,7 @@ interface WebhookServerConfigNodeConfig extends ConfigNodeConfig {
     name:"Webhook Server Config Node",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "WebhookServerConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     dependencies:[ WebhookServerService ],
     tags: [ "Core" ]
 })

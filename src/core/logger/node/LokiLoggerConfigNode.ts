@@ -23,7 +23,7 @@ interface LokiLoggerConfigNodeConfig extends ConfigNodeConfig {
     name:"Loki Logger",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "LokiLoggerConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     dependencies:[ LoggerService ],
     tags: [ "LoggerType" ]
 })

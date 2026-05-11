@@ -382,24 +382,53 @@ node
             </div>
 
             <div class="form-row">
-                <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="margin:8px 0 10px 102px; width:20px;" />
+                <label>Reverse Proxy</label>
+                <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="width:20px; margin-right:5px;" />
                 <label style="width:auto" for="{{defaults.reverseProxies_enabled}}"><span>Enable Reverse Proxy</span></label>
             </div>
-
             <div id="section_webhookconfig_reverseproxy" style="display:none">
                 <div class="form-row">
-                    <span>
-                        <ol id="reverseproxylist_table" class="theotherwillembotha-compact-table"></ol>
-                    </span>
+                    <label></label>
+                    <ol id="reverseproxylist_table" class="theotherwillembotha-compact-table"></ol>
                 </div>
             </div>
+
+            
         </div>
     </div>
 </script>
 
 
 <script type="text/markdown" template-section="onIncludeDocumentation">
-### Logging
-: *enable logging* (boolean) : if checked, then the node will produce logging output to the specified logger.
-: *webhook* (webhook) : the webhook Server / port that this webhook will be attached to.
+### Webhook
+: *server* (webhookserverconfig) : the web server that this webhook will be bound to.
+: *path* (string) : the url path eg '/service' that should be regeistered on the webserver for this webhook callback
+: *authentication* (auth) : the authentication mechanism that should be used on this endpoint
+: *enable reverse proxy* (boolean) : whether this webhook will be exposed using a reverse proxy or not.
+: *reverse proxies* (reverse proxies) : the list of reverse proxies thie endpoint will be exposed on.
+
+### Webhook Authentication
+Three strategies are available for securing the webhook endpoint.
+
+- None:
+The endpoint accepts all incoming requests without any credential check.
+
+- Basic Auth:
+Validates the `Authorization` header on each incoming request against a username and password pair using HTTP Basic Authentication (RFC 7617).
+: *username* (string) : the username expected in the `Authorization` header
+: *password* (string) : the password expected in the `Authorization` header
+
+- API Key:
+Validates a key/value pair carried in the request. Only the `Header` mechanism is currently supported — the key is read from a named request header and compared against the configured value. Requests that do not supply the correct key receive a `401` response.
+: *mechanism* (mechanism) : the transport mechanism for the key. Currently supported: `Header`
+: *key name*  (string)    : the name of the request header carrying the key (e.g. `x-api-key`)
+: *key value* (string)    : the expected value — requests not matching this value are rejected
+
+### Reverse Proxy
+When *enable reverse proxy* is checked, the webhook endpoint is registered with one or more reverse proxy services installed in Node-RED. Reverse proxy types are discovered automatically from any plugin that registers a service tagged `ReverseProxyType` (e.g. an Nginx Proxy Manager integration). Each row in the list maps the internal webhook server to a public-facing domain.
+
+: *proxy*       (ReverseProxyType) : the reverse proxy service to register the endpoint with
+: *domain name* (string)           : the public domain name to expose the endpoint on
+
+The *external host* and *external port* fields on the linked **Webhook Server** config node must be set correctly for the proxy registration to resolve to the right internal address.
 </script>

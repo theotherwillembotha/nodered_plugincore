@@ -17,7 +17,7 @@ interface CounterMetricConfigNodeConfig extends ConfigNodeConfig, CounterMetricC
     name:"Counter Metric Config Node",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "CounterMetricConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     templates:[
         { template:MetricsTemplate, config: {} }
     ],

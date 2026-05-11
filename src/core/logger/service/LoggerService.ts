@@ -299,7 +299,7 @@ export class LoggerService extends BaseService {
             "@theotherwillembotha/loggerservice",
             "LoggerService",
             "services-plugin",
-            "@theotherwillembotha/nodered_plugincore",
+            "@theotherwillembotha/node-red-plugincore",
             LoggerService,
             [LoggerConfigNode, LoggerTemplate]
         );

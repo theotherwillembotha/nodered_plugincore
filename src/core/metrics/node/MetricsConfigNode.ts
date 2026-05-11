@@ -26,7 +26,7 @@ interface MetricsConfigNodeConfig extends ConfigNodeConfig, WebhookTemplateConfi
     name:"Metrics Config Node",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "MetricsConfigNode.html",
-    package: "@theotherwillembotha/nodered_plugincore",
+    package: "@theotherwillembotha/node-red-plugincore",
     templates:[
         { template:WebhookTemplate, config: {} }
     ],
