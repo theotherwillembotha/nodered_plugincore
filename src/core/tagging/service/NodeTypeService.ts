@@ -22,7 +22,7 @@ export class NodeTypeService extends BaseService {
             let types = this.getNodeTypesForTag(tag).map( type => {
                 let description = type.getNodeDescriptor();
                 return {
-                    "id": description.name(),
+                    "id": description.id(),
                     "name": description.name(),
                 };
             })

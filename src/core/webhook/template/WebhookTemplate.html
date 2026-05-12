@@ -133,6 +133,12 @@ node
         return types;
     }
 
+    getProxyTypes().then(types => {
+        if(types.length === 0){
+            $("#section_reverseproxy_feature").hide();
+        }
+    });
+
     let getProxies = async () => {
         let proxies = [];
 
@@ -335,17 +341,17 @@ node
         
         <div class="editorgroupborder">
             <div class="form-row nomargin">
-                <label for="{{defaults.webhook}}">Server</label>
+                <label class="towb_editorlabel" for="{{defaults.webhook}}"><i class="fa fa-server"></i> Server</label>
                 <input id="{{defaults.webhook}}" placeholder="webhook" />
             </div>
-            
+
             <div class="form-row">
-                <label for="{{defaults.webhookPath}}">Path</label>
+                <label class="towb_editorlabel" for="{{defaults.webhookPath}}"><i class="fa fa-link"></i> Path</label>
                 <input type="text" id="{{defaults.webhookPath}}" placeholder="/example" />
             </div>
 
             <div class="form-row">
-                <label for="{{defaults.webhookAuth}}">Authentication</label>
+                <label class="towb_editorlabel" for="{{defaults.webhookAuth}}"><i class="fa fa-lock"></i> Authentication</label>
                 <input type="text" id="{{defaults.webhookAuth}}" placeholder="none" />
             </div>
 
@@ -354,33 +360,34 @@ node
 
             <div class="webhookauth webhookauth-basic">
                 <div class="form-row">
-                    <label for="{{defaults.webhookAuth_basic_username}}">Auth Username:</label>
+                    <label class="towb_editorlabel" for="{{defaults.webhookAuth_basic_username}}"><i class="fa fa-user"></i> Username</label>
                     <input type="text" id="{{defaults.webhookAuth_basic_username}}" placeholder="testUser" />
                 </div>
 
                 <div class="form-row">
-                    <label for="{{defaults.webhookAuth_basic_password}}">Auth Password:</label>
+                    <label class="towb_editorlabel" for="{{defaults.webhookAuth_basic_password}}"><i class="fa fa-key"></i> Password</label>
                     <input type="password" id="{{defaults.webhookAuth_basic_password}}" placeholder="password" />
                 </div>
             </div>
 
             <div class="webhookauth webhookauth-apikey">
                 <div class="form-row">
-                    <label for="{{defaults.webhookAuth_apikey_mechanism}}">APIKey Mechanism:</label>
+                    <label class="towb_editorlabel" for="{{defaults.webhookAuth_apikey_mechanism}}"><i class="fa fa-exchange"></i> Mechanism</label>
                     <input type="text" id="{{defaults.webhookAuth_apikey_mechanism}}"/>
                 </div>
 
                 <div class="form-row">
-                    <label for="{{defaults.webhookAuth_apikey_key}}">APIKey Key:</label>
+                    <label class="towb_editorlabel" for="{{defaults.webhookAuth_apikey_key}}"><i class="fa fa-id-badge"></i> APIKey name</label>
                     <input type="text" id="{{defaults.webhookAuth_apikey_key}}" placeholder="x-api-key" />
                 </div>
 
                 <div class="form-row">
-                    <label for="{{defaults.webhookAuth_apikey_value}}">APIKey Value</label>
+                    <label class="towb_editorlabel" for="{{defaults.webhookAuth_apikey_value}}"><i class="fa fa-lock"></i> APIKey value</label>
                     <input type="text" id="{{defaults.webhookAuth_apikey_value}}" placeholder="testvalue" />
                 </div>
             </div>
 
+            <div id="section_reverseproxy_feature">
             <div class="form-row">
                 <label>Reverse Proxy</label>
                 <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="width:20px; margin-right:5px;" />
@@ -392,8 +399,9 @@ node
                     <ol id="reverseproxylist_table" class="theotherwillembotha-compact-table"></ol>
                 </div>
             </div>
+            </div>
 
-            
+
         </div>
     </div>
 </script>

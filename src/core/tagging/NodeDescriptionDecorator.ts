@@ -14,7 +14,7 @@ export type NodeDescriptionConfig = {
 
 export function NodeDescription(config:NodeDescriptionConfig) {
     return function(target: any) {
-        let descriptor:NodeDescriptor = new NodeDescriptor(config.group, config.id, config.sourceFile, config.package);
+        let descriptor:NodeDescriptor = new NodeDescriptor(config.group, config.id, config.name, config.sourceFile, config.package);
         
         if(config.templates){
             for(let template of config.templates){

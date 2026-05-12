@@ -102,7 +102,7 @@
 <script type="text/javascript" template-section="onCompose">
     node
         .addDefault("logEnabled", { value:false, required:true})
-        .addDefault("logger", { required:false})
+        .addDefault("logger", { required:false, value:'', type:"DelegatedConfigReferenceNode"})
         .addDefault("logTemplateOverrideEnabled",  {value:false})
         .addDefault("logTemplateOverride", {value:"message:{{msg}}"})
 </script>
@@ -186,7 +186,7 @@
         value: node.logTemplateOverride
     });
 
-    let loggerSelector = $("#{{defaults.logger}}");
+    let loggerSelector = $("#logger-selector");
     let loggerEditButton = $("#logger-edit-btn");
     let loggerAddButton = $("#logger-add-btn");
 
@@ -199,7 +199,7 @@
 
         // figure out what type of logger this is.
         let selectedLogger = (await getLoggers()).find(logger => logger.id === loggerSelector.val());
-        RED.editor.editConfig("#{{defaults.logger}}", selectedLogger.type, selectedLogger.id);
+        RED.editor.editConfig("#logger-selector", selectedLogger.type, selectedLogger.id);
     });
 
     loggerAddButton.on('click', function(event) {
@@ -223,13 +223,13 @@
                 .appendTo($dropdown);
             });
 
-            // Position it near the button
-            $dropdown.css({
-                top:  $btn.offset().top + $btn.height(),
-                left: $btn.offset().left
-            });
-
+            // Append first so outerWidth() is measurable, then position so the
+            // right edge of the dropdown aligns with the right edge of the button.
             $('body').append($dropdown);
+            $dropdown.css({
+                top:  $btn.offset().top + $btn.outerHeight(),
+                left: $btn.offset().left + $btn.outerWidth() - $dropdown.outerWidth()
+            });
 
             $(document).on('mousedown.dropdown', function(e) {
                 if (!$(e.target).closest('.loggertype-dropdown').length) {
@@ -247,7 +247,7 @@
                 // Do whatever you need with the selection
                 console.log('Selected:', selectedValue, selectedText);
                 $dropdown.remove();
-                RED.editor.editConfig("#{{defaults.logger}}", selectedValue, "_ADD_");
+                RED.editor.editConfig("#logger-selector", selectedValue, "_ADD_");
             });
         })
     });
@@ -265,12 +265,15 @@
     // lastly, make sure that we set the correct value on the logger selector.
     updateLoggerSelectorList().then(() => {
         loggerSelector.val(node.logger);
+        loggerSelector.trigger('change');
     });
 
 </script>
 
 <script type="text/javascript" template-section="onIncludeEditSave">
     node = this;
+    var selectedLogger = $("#logger-selector").val();
+    node.logger = (selectedLogger && selectedLogger !== "_ADD_") ? selectedLogger : '';
     node.logTemplateOverride = node.logTemplateOverrideEditor.getValue();
     node.logTemplateOverrideEditor.destroy();
     delete node.logTemplateOverrideEditor;
@@ -289,9 +292,9 @@
 
             <div id="section_logEnabled">
                 <div class="form-row nomargin">
-                    <label for="{{defaults.logger}}">Logger</label>
+                    <label for="logger-selector">Logger</label>
                     <div style="width: 70%; display: inline-flex;">
-                        <select id="{{defaults.logger}}" style="flex-grow: 1;" class="">
+                        <select id="logger-selector" style="flex-grow: 1;" class="">
                             <option value="_ADD_">none</option>
                         </select>
                         <a id="logger-edit-btn" class="red-ui-button disabled" style="margin-left: 10px;">
@@ -310,7 +313,7 @@
 
                 <div id="section_logTemplateOverrideEnabled">
                     <div class="form-row">
-                        <label for="node-input-logTemplateOverrideEditor"><i class="fa fa-tag"></i> Template</label>
+                        <label class="towb_editorlabel" for="node-input-logTemplateOverrideEditor"><i class="fa fa-code"></i> Template</label>
                         <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-logTemplateOverrideEditor"></div>
                     </div>
                 </div>

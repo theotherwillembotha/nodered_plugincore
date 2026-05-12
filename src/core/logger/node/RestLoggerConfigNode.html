@@ -6,8 +6,8 @@
         .addDefault("level", {value:"info", required:true})
 
         // platform rest:
-        .addDefault("est_url", {})
-        .addDefault("est_ignoresslerror", {})
+        .addDefault("rest_url", {})
+        .addDefault("rest_ignoresslerror", {})
         .addDefault("rest_auth_type", {})
         .addDefault("rest_auth_basic_username", {})
         .addDefault("rest_auth_basic_password", {})
@@ -88,122 +88,96 @@
 <script type="text/html" template-section="onIncludeEditForm">
 <div id="LoggerConfig">
     <div class="form-row">
-        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <label class="towb_editorlabel" for="node-config-input-name"><i class="fa fa-font"></i> Name</label>
         <input type="text" id="node-config-input-name" />
     </div>
 
     <div class="form-row">
-        <label for="node-config-input-level"><i class="fa fa-tag"></i> Level</label>
+        <label class="towb_editorlabel" for="node-config-input-level"><i class="fa fa-signal"></i> Level</label>
         <input type="text" id="node-config-input-level" />
     </div>
 
     <div class="platform platform-rest">
         <div class="form-row">
-            <label for="node-config-input-rest_url"><i class="fa fa-tag"></i> URL</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_url"><i class="fa fa-link"></i> URL</label>
             <input class="platform-rest-input required" type="text" id="node-config-input-rest_url" />
         </div>
         <div class="form-row">
-            <label></label>
+            <label class="towb_editorlabel"></label>
             <input type="checkbox" id="node-config-input-rest_ignoresslerror" style="width:20px; margin-right:5px;" />
             <label style="width:auto" for="node-config-input-rest_ignoresslerror"><span>Ignore Invalid SSL certificates</span></label>
         </div>
         <div class="form-row">
-            <label for="node-config-input-rest_auth_type"><i class="fa fa-tag"></i> Authentication</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_auth_type"><i class="fa fa-lock"></i> Authentication</label>
             <input class="platform-rest-input required" type="text" id="node-config-input-rest_auth_type" />
         </div>
         <div class="form-row platform-rest-auth auth-basic">
-            <label for="node-config-input-rest_auth_basic_username"><i class="fa fa-tag"></i> Username</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_auth_basic_username"><i class="fa fa-user"></i> Username</label>
             <input class="platform-rest-input" type="text" id="node-config-input-rest_auth_basic_username" />
         </div>
         <div class="form-row platform-rest-auth auth-basic">
-            <label for="node-config-input-rest_auth_basic_password"><i class="fa fa-tag"></i> Password</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_auth_basic_password"><i class="fa fa-key"></i> Password</label>
             <input class="platform-rest-input" type="password" id="node-config-input-rest_auth_basic_password" />
         </div>
         <div class="form-row platform-rest-auth auth-apikey">
-            <label for="node-config-input-rest_auth_apikey_mechanism"><i class="fa fa-tag"></i> Mechanism</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_auth_apikey_mechanism"><i class="fa fa-exchange"></i> Mechanism</label>
             <input class="platform-rest-input" type="text" id="node-config-input-rest_auth_apikey_mechanism" />
         </div>
         <div class="form-row platform-rest-auth auth-apikey">
-            <label for="node-config-input-rest_auth_apikey_name"><i class="fa fa-tag"></i> APIKey name</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_auth_apikey_name"><i class="fa fa-id-badge"></i> APIKey name</label>
             <input class="platform-rest-input" type="text" id="node-config-input-rest_auth_apikey_name" />
         </div>
         <div class="form-row platform-rest-auth auth-apikey">
-            <label for="node-config-input-rest_auth_apikey_value"><i class="fa fa-tag"></i> APIKey value</label>
+            <label class="towb_editorlabel" for="node-config-input-rest_auth_apikey_value"><i class="fa fa-lock"></i> APIKey value</label>
             <input class="platform-rest-input" type="text" id="node-config-input-rest_auth_apikey_value" />
         </div>
     </div>
 
     <div class="form-row">
-        <label for="node-config-input-templateEditor"><i class="fa fa-tag"></i> Template</label>
+        <label class="towb_editorlabel" for="node-config-input-templateEditor"><i class="fa fa-code"></i> Template</label>
         <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-config-input-templateEditor"></div>
     </div>
 </div>
 </script>
 
 <script type="text/markdown" template-section="onIncludeDocumentation">
-Configuration node for the Logger Integration
+Posts log messages to an HTTP or HTTPS endpoint as a JSON payload.
 
-## Inputs
-: *name*    (string)    : The common name for the logger Configuration
-: *level*   (level)     : The logging level - debug, info, warning, error
-: *platform*(string)    : The common name for the logger Configuration
-: *template*(mustache)  : A template for the log messages.
+### Properties
+: *name*        (string)    : A descriptive name for this logger configuration.
+: *level*       (level)     : The minimum log level. Messages below this threshold are suppressed. Options: DEBUG, INFO, WARNING, ERROR.
+: *url*         (url)       : The endpoint that log messages will be POSTed to.
+: *ignore SSL errors* (boolean) : When enabled, invalid SSL certificates are accepted.
+: *authentication* (select) : The authentication strategy applied to each request. Options: None, Basic, ApiKey.
+: *template*    (mustache)  : A Mustache/Handlebars template that formats the log message body.
 
-## Logger platform
-Currently supported logging platforms
+### Authentication
+#### Basic
+Authenticates using the HTTP `Authorization` header (RFC 7617).
+: *username*    (string)    : The username credential.
+: *password*    (string)    : The password credential.
 
-### Console
-The log message will be printed out to stdio
+#### ApiKey
+Authenticates by injecting a key/value pair into the request.
+: *mechanism*   (select)    : Where the key is injected — Header, Query Param, or Matrix Param.
+: *APIKey name* (string)    : The name of the key (e.g. `x-api-key`).
+: *APIKey value* (string)   : The value of the key.
 
-### Http / Https
-Publish the message to an http endpoint using a http / https POST command.
+### Mustache Templating
+Mustache/Handlebars templates build the message string POSTed to the endpoint.
 
-: *url*                 (url)           : The endpoint for the url where requests are to be posted to.
-: *ignore ssl errors*   (boolean)       : If enabled, the invalid ssl certificates will be ignored.
-: *authentication*      (auth method)   : what auth method should be used for the http request. (none, basic, api key)
+#### Provided Properties
+: *msg*         (object)    : The Node-RED message object passed through the node.
+: *currentTime* (string)    : The current time in ISO 8601 format.
 
-#### Authentication
-##### Basic
-Provides basic authentication using the Authorization header 
+#### Helpers
+: *json*        (helper)    : Serialises an object to a JSON string using `JSON.stringify`.
 
-: *username*    (string) : the username used for basic authentication
-: *password*    (string) : the password used for basic authentication
+#### Examples
+- `{{{json msg}}}` — serialises the full message object as JSON.
 
-##### APIKey
-Provides authentication using a matrix parameter, header or query parameter and an apikey
-
-: *mechanism*   (mechanism) : the mechanism that will be used for transmitting the key (header, queryparam, matrixparam)
-: *apikey name* (string)    : the name of the key used for api authentication. (path variable or query param name)
-: *apikey value*(string)    : the value of the api key that will be transmitted. (beware of special characters)
-
-### Loki
-Publish the message to a loki endpoint.
-
-: *host*        (string) : the host and port\ of the loki instance that it being logged to
-: *tenant*      (string) : the tenant id that will be used to log to
-: *username*    (string) : the username for the loki instance.
-: *authtoken*   (string) : the authtoken for the loki instance.
-
-# Mustache Templating
-Mustache / Handlebars are used for building up the logged message payloads that are sent to the logging backend.
-The resultant message will be interpreted as a string, meaning care should be taken in the event that a string representation of a json object is built.
-
-### Provided Properties
-A couple of values are provided to the logging context by default.
-
-: *msg*         (object)    : an object containing the payload or message that should be parsed through the template.
-: *currentTime* (object)    : a string containing the current time in ISO8601 format
-
-### Mustache Helpers
-In addition to the provided properties, some "helpers" have also been provided to assist in serialization.
-
-: *json*        (helper)    : converts a json object to a string using the JSON.stringify method.
-
-## Examples
-- {{{json msg}}} - serializes the the msg object to json format.
-
-# References
-- [Mustache - Wikipedia](https://en.wikipedia.org/wiki/Mustache_(template_system))
-- [Mustache - Playground](https://jgonggrijp.gitlab.io/wontache/playground.html)
+#### References
+- [Mustache — Wikipedia](https://en.wikipedia.org/wiki/Mustache_(template_system))
+- [Mustache — Playground](https://jgonggrijp.gitlab.io/wontache/playground.html)
 </script>
 

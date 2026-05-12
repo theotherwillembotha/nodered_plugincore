@@ -5,7 +5,6 @@ import Handlebars from "handlebars";
 import { createLogger, format, transports } from "winston";
 import LokiTransport from "winston-loki";
 import { URLRecord, parseURL } from 'whatwg-url';
-import { LoggerConfigNode } from "../node/LoggerConfigNode";
 import { LoggerTemplate } from "../template/LoggerTemplate";
 var network = require('network');
 import deepEqual from "deep-equal";
@@ -137,7 +136,7 @@ export interface LokiLoggerConfig extends BaseLoggerConfig{
     host:string;
     userid?:string;
     authtoken?:string;
-    tenantID?:string;
+    tenantid?:string;
 }
 
 class LokiLogger extends NewLogger<LokiLoggerConfig>{
@@ -151,7 +150,7 @@ class LokiLogger extends NewLogger<LokiLoggerConfig>{
             json: true,
             format: format.json(),
             headers: {
-                "X-Scope-OrgID": (config.tenantID) ? config.tenantID : undefined
+                "X-Scope-OrgID": (config.tenantid) ? config.tenantid : undefined
             },
             replaceTimestamp: true,
             onConnectionError: (err:unknown) => console.error(err),
@@ -301,7 +300,7 @@ export class LoggerService extends BaseService {
             "services-plugin",
             "@theotherwillembotha/node-red-plugincore",
             LoggerService,
-            [LoggerConfigNode, LoggerTemplate]
+            [LoggerTemplate]
         );
     }
 }

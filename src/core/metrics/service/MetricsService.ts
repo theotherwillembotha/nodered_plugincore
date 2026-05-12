@@ -415,18 +415,18 @@ export class MetricsContainer {
     return counter;
   }
 
-  public guage(config: GaugeMetricConfig): GaugeMetric {
-    var guageId = `gauge_${config.node.id}`;
-    var gauge:GaugeMetric = this.gauges[guageId];
+  public gauge(config: GaugeMetricConfig): GaugeMetric {
+    var gaugeId = `gauge_${config.node.id}`;
+    var gauge:GaugeMetric = this.gauges[gaugeId];
     if(gauge){
       // check if the config has changed much.
       if(!deepEqual(gauge.config(), config)){
-        this._registry.removeSingleMetric(guageId);
-        this.gauges[guageId] = (gauge = new GaugeMetric(guageId, config, this._registry));
+        this._registry.removeSingleMetric(gaugeId);
+        this.gauges[gaugeId] = (gauge = new GaugeMetric(gaugeId, config, this._registry));
       }
     }
     else{
-      this.gauges[guageId] = (gauge = new GaugeMetric(guageId, config, this._registry));
+      this.gauges[gaugeId] = (gauge = new GaugeMetric(gaugeId, config, this._registry));
     }
     return gauge;
   }

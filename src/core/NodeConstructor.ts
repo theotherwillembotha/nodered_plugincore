@@ -79,15 +79,17 @@ export type NodeDependencyType = INamedType & (INodeClass | IServiceClass);
 
 export class NodeDescriptor {
     private _group:string;
-    private _name:string;
+    private _id:string;
+    private _name:String;
     private _sourceFile: string;
     private _dependencies: DependencyType[] = []
     private _templates:{template:ITemplateClass, config:TemplateConfig}[] = [];
     private _package: string;
     private _tags: string[] = [];
 
-    constructor(group:string, name:string, sourceFile:string, pkg:string){
+    constructor(group:string, id:string, name:string, sourceFile:string, pkg:string){
         this._group = group;
+        this._id = id;
         this._name = name;
         this._sourceFile = sourceFile;
         this._package = pkg;
@@ -114,6 +116,7 @@ export class NodeDescriptor {
     }
 
     public group(){ return  this._group; }
+    public id(){ return this._id; }
     public name(){ return this._name; }
     public sourceFile() { return this._sourceFile; }
     public package() { return this._package; }
@@ -857,7 +860,7 @@ let evalInContext = (context: any, js: string) => {
 let buildNode = function(node:INodeClass){
     // get the node descriptor and create the builder.
     let nodeDescriptor = node.getNodeDescriptor();
-    let nodeBuilder = new NodeBuilder(nodeDescriptor.name(), nodeDescriptor.group());
+    let nodeBuilder = new NodeBuilder(nodeDescriptor.id(), nodeDescriptor.group());
 
     // load the html source file
     let uiDom = new JSDOM(fs.readFileSync(nodeDescriptor.sourceFile()));
@@ -873,7 +876,7 @@ let buildNode = function(node:INodeClass){
     Object.values(sections).forEach(section => {
         let sectionData = uiDom.window.document.querySelector(`[template-section='on${section}']`)?.innerHTML;
         if(sectionData){
-            (nodeBuilder as any)[`add${section}`](nodeDescriptor.name(), sectionData);
+            (nodeBuilder as any)[`add${section}`](nodeDescriptor.id(), sectionData);
         }
     });
 

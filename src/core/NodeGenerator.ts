@@ -76,8 +76,8 @@ class NodeGenerator {
         try{
             // verify that we have dont already have this node.
             let descriptor = node.getNodeDescriptor();
-            if(!this._nodes[descriptor.name()]){
-                this._nodes[descriptor.name()] = {nodeClass:node, descriptor:descriptor};
+            if(!this._nodes[descriptor.id()]){
+                this._nodes[descriptor.id()] = {nodeClass:node, descriptor:descriptor};
                 // skip the recursive dependencies for now.
                 //descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
             }
@@ -117,7 +117,7 @@ class NodeGenerator {
         // STEP 2. compose the HTMLStructure of each of the nodes.
         let nodeHTMLOutut = Object.values(this._nodes)
             .map(node => {
-                console.log(`Processing node: ${node.descriptor.name()}`);
+                console.log(`Processing node: ${node.descriptor.id()}`);
 
                 return buildNode(node.nodeClass);
             })
@@ -136,7 +136,7 @@ ${nodeHTMLOutut}
         // 1. get a list of the files to import.
         let importList = [
             ...Object.values(this._nodes).map(node => {
-                return `const ${node.descriptor.name()} = require("${node.descriptor.package()}").${node.descriptor.name()};`;
+                return `const ${node.descriptor.id()} = require("${node.descriptor.package()}").${node.descriptor.id()};`;
                 //let nodeFile = "./" + node.group() + "/" + node.sourceFile();
                 //return `const ${node.name()} = require("${nodeFile}");`;
             }),
@@ -145,7 +145,7 @@ ${nodeHTMLOutut}
 
         // 2. get the exported modules that have to be regestered by the node manager.
         let moduleExports = Object.values(this._nodes).map(node => {
-            return `    manager.registerNodeType("${node.descriptor.name()}", ${node.descriptor.name()});`;
+            return `    manager.registerNodeType("${node.descriptor.id()}", ${node.descriptor.id()});`;
         }).join("\n");
 
         fs.writeFileSync(nodesOutputFile + ".js", `
@@ -162,7 +162,7 @@ ${moduleExports}
         
         `);
 
-        console.log(`Done building ${Object.keys(this._nodes).length} nodes\n${Object.values(this._nodes).map(node => " - " + node.descriptor.name() + "\n").join("")}\n`);
+        console.log(`Done building ${Object.keys(this._nodes).length} nodes\n${Object.values(this._nodes).map(node => " - " + node.descriptor.id() + "\n").join("")}\n`);
 
         let serviceExports = this._services.map(service => {
             return `    manager.registerService(${service.name()}.${service.name()});`
@@ -243,10 +243,10 @@ module.exports = function (RED) {
     }
 
     private static generateHeader(node:NodeDescriptor){
-        let padding = ' '.repeat(Math.max(0, Math.floor(NodeGenerator.headerWidth - node.name().length)/2 ));
+        let padding = ' '.repeat(Math.max(0, Math.floor(NodeGenerator.headerWidth - node.id().length)/2 ));
         return `
 <!-- *${'*'.repeat(NodeGenerator.headerWidth)}* -->
-<!-- ${padding} ${node.name()} ${padding}  -->
+<!-- ${padding} ${node.id()} ${padding}  -->
 <!-- *${'*'.repeat(NodeGenerator.headerWidth)}* -->
 `;
     }

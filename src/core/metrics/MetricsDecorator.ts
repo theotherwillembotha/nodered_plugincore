@@ -100,7 +100,7 @@ export function Metrics(metricsConfig: MetricsConfig):Function {
                 metricdescription:metricsConfig.description,
                 node:nde
               };
-              this[valueSymbol] = _metrics.guage(gaugeConfig);
+              this[valueSymbol] = _metrics.gauge(gaugeConfig);
               return this[valueSymbol];
             }
 
@@ -183,7 +183,7 @@ export function Metrics(metricsConfig: MetricsConfig):Function {
                   metricdescription:metricsConfig.description,
                   node:nde
                 };
-                this[valueSymbol] = _metrics.guage(gaugeConfig);
+                this[valueSymbol] = _metrics.gauge(gaugeConfig);
                 return this[valueSymbol];
               }
 

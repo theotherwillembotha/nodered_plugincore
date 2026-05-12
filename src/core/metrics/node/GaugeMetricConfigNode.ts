@@ -14,7 +14,7 @@ interface GaugeMetricConfigNodeConfig extends ConfigNodeConfig, GaugeMetricConfi
 
 @NodeDescription({
     id:"GaugeMetricConfigNode",
-    name:"Guage Metric Config Node",
+    name:"Gauge Metric Config Node",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "GaugeMetricConfigNode.html",
     package: "@theotherwillembotha/node-red-plugincore",
@@ -45,7 +45,7 @@ export class GaugeMetricConfigNode extends ConfigNode<GaugeMetricConfigNodeConfi
             }
         };
         
-        this._gauge = this._metrics.guage(gaugeConfig);
+        this._gauge = this._metrics.gauge(gaugeConfig);
         
         if(config.reset){
             _this._gauge.reset();

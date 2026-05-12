@@ -1,9 +1,10 @@
 
+import { DelegatedConfigReferenceNode } from "./core/other/node/DelegatedConfigReferenceNode.js";
 import { NodeTypeService } from "./core/tagging/service/NodeTypeService.js";
 import { NodeGenerator, SettingsService, BasicTemplate, SettingsTemplate, TimerMetricTemplate, ConsoleLoggerConfigNode, RestLoggerConfigNode, LokiLoggerConfigNode } from "./index.js"
 import { WebhookServerConfigNode, WebhookServerService, WebhookTemplate,  } from "./index.js"
 
-import {LoggerService, LoggerTemplate, LoggerConfigNode } from "./index.js";
+import {LoggerService, LoggerTemplate } from "./index.js";
 
 import { MetricsService, MetricsTemplate, CounterMetricTemplate, GaugeMetricTemplate} from "./index.js";
 import { MetricsConfigNode, GaugeMetricConfigNode, TimerMetricConfigNode, CounterMetricConfigNode } from "./index.js";
@@ -27,6 +28,7 @@ new NodeGenerator("./src/core/")
     .registerTemplate(WebhookTemplate)
 
     // nodes
+    .registerNode(DelegatedConfigReferenceNode)
     .registerNode(ConsoleLoggerConfigNode)
     .registerNode(RestLoggerConfigNode)
     .registerNode(LokiLoggerConfigNode)

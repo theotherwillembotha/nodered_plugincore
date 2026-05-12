@@ -16,7 +16,7 @@ The metrics / repositories are menanaged by the plugin and triggered when the fl
 
 The reasoning for this is that the Metrics exist outside of the flow, but is configured using the flow.
 Basically, if the metrics arent changed, we dont have to redeploy the metrics, which means that
-stuff like coutners, guages and timers are not reset.
+stuff like coutners, gauges and timers are not reset.
 */
 interface MetricsConfigNodeConfig extends ConfigNodeConfig, WebhookTemplateConfig {
 }

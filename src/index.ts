@@ -4,7 +4,6 @@ export * from "./core/NodeConstructor";
 
 // LOGGER
 export * from "./core/logger/service/LoggerService";
-export * from "./core/logger/node/LoggerConfigNode";
 export * from "./core/logger/template/LoggerTemplate";
 export * from "./core/logger/node/ConsoleLoggerConfigNode";
 export * from "./core/logger/node/RestLoggerConfigNode";
@@ -25,8 +24,8 @@ export * from "./core/metrics/template/TimerMetricTemplate";
 export * from "./core/tagging/service/NodeTypeService";
 export * from "./core/tagging/NodeDescriptionDecorator";
 
-
 // OTHER
+export * from "./core/other/node/DelegatedConfigReferenceNode";
 export * from "./core/other/service/InputService";
 export * from "./core/other/service/SettingsService";
 export * from "./core/other/template/BasicTemplate";

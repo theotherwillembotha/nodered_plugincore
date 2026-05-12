@@ -15,7 +15,7 @@ interface LokiLoggerConfigNodeConfig extends ConfigNodeConfig {
     loki_host:string,
     loki_userid?:string,
     loki_authtoken?:string,
-    loki_tenantID?:string
+    loki_tenantid?:string
 }
 
 @NodeDescription({
@@ -46,7 +46,7 @@ export class LokiLoggerConfigNode extends ConfigNode<LokiLoggerConfigNodeConfig>
             host:config.loki_host,
             userid:config.loki_userid,
             authtoken:config.loki_authtoken,
-            tenantID:config.loki_tenantID,
+            tenantID:config.loki_tenantid,
         }
 
         this._logger = LoggerService.get(loggerConfig);

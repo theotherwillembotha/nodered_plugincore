@@ -88,23 +88,23 @@
 <script type="text/html" template-section="onIncludeEditForm">
     <div id="TimerMetricConfig">
         <div class="form-row">
-            <label class="towb_editorlabel" for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+            <label class="towb_editorlabel" for="node-config-input-name"><i class="fa fa-font"></i> Name</label>
             <input type="text" id="node-config-input-name" />
         </div>
 
         <div class="form-row">
-            <label class="towb_editorlabel" for="node-config-input-description"><i class="fa fa-tag"></i> Description</label>
+            <label class="towb_editorlabel" for="node-config-input-description"><i class="fa fa-info-circle"></i> Description</label>
             <input type="text" id="node-config-input-description" />
         </div>
 
         <div class="form-row">
-            <label class="towb_editorlabel" for="node-config-input-metricType"><i class="fa fa-tag"></i> Type</label>
+            <label class="towb_editorlabel" for="node-config-input-metricType"><i class="fa fa-bar-chart"></i> Type</label>
             <input class="towb_editorfield" type="text" id="node-config-input-metricType" />
         </div>
 
         <div class="metrictype metrictype_histogram">
             <div class="form-row">
-                <label class="towb_editorlabel" for="node-config-input-buckettype"><i class="fa fa-tag"></i> Bucket Type</label>
+                <label class="towb_editorlabel" for="node-config-input-buckettype"><i class="fa fa-sliders"></i> Bucket Type</label>
                 <input class="towb_editorfield" type="text" id="node-config-input-buckettype" />
             </div>
 
@@ -114,37 +114,37 @@
 
             <div class="metricsconfig_buckets metricsconfig_buckets_manual">
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_manual_intervals"><i class="fa fa-tag"></i> Buckets</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_manual_intervals"><i class="fa fa-sliders"></i> Buckets</label>
                     <input type="text" id="node-config-input-buckettype_manual_intervals" placeholder="0.001, 0.01, 0.1, 1, 2, 5", value="0.001, 0.01, 0.1, 1, 2, 5"/>
                 </div>
             </div>
 
             <div class="metricsconfig_buckets metricsconfig_buckets_linear">
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_linear_start"><i class="fa fa-tag"></i> Start</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_linear_start"><i class="fa fa-sliders"></i> Start</label>
                     <input class="towb_editorfield_short" type="text" id="node-config-input-buckettype_linear_start" placeholder="0.000", value="0.000"/>
                 </div>
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_linear_inteval"><i class="fa fa-tag"></i> Interval</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_linear_interval"><i class="fa fa-sliders"></i> Interval</label>
                     <input class="towb_editorfield_short" type="text" id="node-config-input-buckettype_linear_interval" placeholder="10", value="10"/>
                 </div>
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_linear_count"><i class="fa fa-tag"></i> Count</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_linear_count"><i class="fa fa-sliders"></i> Count</label>
                     <input class="towb_editorfield_short" type="text" id="node-config-input-buckettype_linear_count" placeholder="10", value="10"/>
                 </div>
             </div>
 
             <div class="metricsconfig_buckets metricsconfig_buckets_exponential">
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_exponential_start"><i class="fa fa-tag"></i> Start</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_exponential_start"><i class="fa fa-sliders"></i> Start</label>
                     <input class="towb_editorfield_short" type="text" id="node-config-input-buckettype_exponential_start" placeholder="1", value="1"/>
                 </div>
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_exponential_factor"><i class="fa fa-tag"></i> Factor</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_exponential_factor"><i class="fa fa-sliders"></i> Factor</label>
                     <input class="towb_editorfield_short" type="text" id="node-config-input-buckettype_exponential_factor" placeholder="2", value="2"/>
                 </div>
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-buckettype_exponential_count"><i class="fa fa-tag"></i> Count</label>
+                    <label class="towb_editorlabel" for="node-config-input-buckettype_exponential_count"><i class="fa fa-sliders"></i> Count</label>
                     <input class="towb_editorfield_short" type="text" id="node-config-input-buckettype_exponential_count" placeholder="10", value="10"/>
                 </div>
             </div>
@@ -152,7 +152,7 @@
 
         <div class="metrictype metrictype_summary">
             <div class="form-row">
-                <label class="towb_editorlabel" for="node-config-input-percentiletype"><i class="fa fa-tag"></i> Percentile Type</label>
+                <label class="towb_editorlabel" for="node-config-input-percentiletype"><i class="fa fa-sliders"></i> Percentile Type</label>
                 <input type="text" id="node-config-input-percentiletype" />
             </div>
 
@@ -162,7 +162,7 @@
 
             <div class="metricsconfig_percentiles metricsconfig_percentiles_manual">
                 <div class="form-row">
-                    <label class="towb_editorlabel" for="node-config-input-percentiletype_manual_intervals"><i class="fa fa-tag"></i> Percentiles</label>
+                    <label class="towb_editorlabel" for="node-config-input-percentiletype_manual_intervals"><i class="fa fa-sliders"></i> Percentiles</label>
                     <input class="towb_editorfield" type="text" id="node-config-input-percentiletype_manual_intervals" placeholder="0.01, 0.1, 0.9, 0.99", value="0.01, 0.1, 0.9, 0.99"/>
                 </div>
             </div>

@@ -24,7 +24,7 @@ interface RestLoggerConfigNodeConfig extends ConfigNodeConfig {
 
 @NodeDescription({
     id:"RestLoggerConfigNode",
-    name:"Console Logger",
+    name:"Rest Endpoint Logger",
     group:"config",
     sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "RestLoggerConfigNode.html",
     package: "@theotherwillembotha/node-red-plugincore",
