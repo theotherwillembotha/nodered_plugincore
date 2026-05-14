@@ -1,11 +1,11 @@
 # @theotherwillembotha/node-red-plugincore
 
-A TypeScript framework for building production-grade Node-RED plugins with built-in support for structured logging, Prometheus metrics, and webhook servers.
+A TypeScript framework for building production-grade Node-RED plugins with built-in support for structured logging, Prometheus metrics, webhook servers, and reusable UI components.
 
 This package has two roles:
 
 1. **Config nodes** — a set of shared configuration nodes (loggers, metric collectors, webhook server) that are installed into Node-RED and referenced by other nodes in a flow.
-2. **Developer framework** — a TypeScript base library that plugin authors extend to build their own Node-RED nodes, with decorators and templates that wire in logging, metrics, and webhooks automatically.
+2. **Developer framework** — a TypeScript base library that plugin authors extend to build their own Node-RED nodes, with decorators and templates that wire in logging, metrics, webhooks, and editor UI automatically.
 
 ---
 
@@ -16,6 +16,7 @@ This framework is the foundation for a growing set of Node-RED plugins. The foll
 | Plugin | Description |
 |--------|-------------|
 | [@theotherwillembotha/node-red-telemetry](https://github.com/theotherwillembotha/nodered_telemetry) | Ready-to-use flow nodes for structured logging and Prometheus metrics — Logger, Counter, Gauge, and Timer nodes that attach to the config nodes provided by this package. |
+| [@theotherwillembotha/node-red-nginxproxymanager](https://github.com/theotherwillembotha/nodered_nginxproxymanager) | Node-RED nodes for managing Nginx Proxy Manager hosts directly from your flows. Includes a config node that registers as a reverse proxy provider, an Update Host node for creating and updating proxy entries, and a Get Hosts node for retrieving the current host list. |
 
 Additional plugins will be listed here as they are published.
 
@@ -41,11 +42,19 @@ Config nodes are shared resources configured once and referenced across your flo
 
 Three logger backends are supported. All expose the same interface and are interchangeable — any node built with the `@Logger` decorator can use any of them.
 
-| Node | Description |
-|------|-------------|
-| **Console Logger** | Writes structured log output to stdout via Winston. Ideal for development and containerised deployments that forward stdout to a log aggregator. |
-| **REST Logger** | Ships log entries to a remote HTTP/HTTPS endpoint. Supports Basic and API Key authentication. |
-| **Loki Logger** | Pushes log entries to a Grafana Loki instance via the Loki HTTP API. Supports multi-tenant deployments. |
+**Console Logger** — writes structured log output to stdout via Winston. Ideal for development and containerised deployments that forward stdout to a log aggregator.
+
+![Console Logger Config](documentation/ConsoleLoggerConfigNode.png)
+
+**REST Logger** — ships log entries to a remote HTTP/HTTPS endpoint. Supports Basic and API Key authentication.
+
+![REST Logger Config](documentation/RestLoggerConfigNode.png)
+
+**Loki Logger** — pushes log entries to a Grafana Loki instance via the Loki HTTP API. Supports multi-tenant deployments via the Tenant ID field.
+
+![Loki Logger Config](documentation/LokiLoggerConfigNode.png)
+
+All three loggers share a **Level** selector (debug, info, warn, error) and a **Template** field — a Handlebars template that controls the shape of each log entry. The default `message:{{msg}}` passes the raw message through; you can customise it to include only the fields you care about.
 
 #### Metrics
 
@@ -169,8 +178,92 @@ Templates bundle reusable UI fragments that compose into any node's editor panel
 | `GaugeMetricTemplate` | Gauge config node reference |
 | `TimerMetricTemplate` | Timer config node reference |
 | `WebhookTemplate` | Webhook server reference, path, auth, and reverse proxy config |
+| `UIHelperTemplate` | Global `PluginCore.dialog()` and `PluginCore.table()` UI factories (see below) |
 | `SettingsTemplate` | General settings section |
 | `BasicTemplate` | Base styles shared by all nodes |
+
+### UI helpers
+
+Including `UIHelperTemplate` in a node's `templates` list injects two client-side factory functions into the Node-RED editor page. Both are available globally as `PluginCore.dialog(...)` and `PluginCore.table(...)` and are styled to match Node-RED's own editor aesthetic.
+
+#### `PluginCore.dialog(options)`
+
+Opens a modal overlay with a title bar and one or more tabs. Closes on the close button, an overlay click, or Escape.
+
+```javascript
+PluginCore.dialog({
+    title: "My Plugin — Status",
+    tabs: [
+        {
+            label: "Proxy Hosts",
+            render: function($container) {
+                $container.append(
+                    PluginCore.table({
+                        columns: [
+                            { key: "id",    label: "ID" },
+                            { key: "name",  label: "Name" },
+                            { key: "enabled", label: "Enabled",
+                              render: function(v) {
+                                  return $("<span>")
+                                      .addClass(v ? "plugincore-status-enabled"
+                                                  : "plugincore-status-disabled")
+                                      .text(v ? "✔ Enabled" : "✘ Disabled");
+                              }}
+                        ],
+                        rows: data
+                    })
+                );
+            }
+        }
+    ]
+});
+```
+
+**Options:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `string` | Heading shown in the dialog title bar |
+| `tabs` | `array` | One or more tab definitions |
+| `tabs[].label` | `string` | Tab heading |
+| `tabs[].render` | `function($container)` | Called with a jQuery element; append content into it |
+
+**Returns:** `{ close() }` — call `close()` to dismiss the dialog programmatically.
+
+---
+
+#### `PluginCore.table(config)`
+
+Returns a styled jQuery `<table>` element ready to append into any container.
+
+```javascript
+var $table = PluginCore.table({
+    columns: [
+        { key: "id",     label: "ID" },
+        { key: "domain", label: "Domain",
+          render: function(value, row) { return value.join(", "); } }
+    ],
+    rows: arrayOfObjects
+});
+$container.append($table);
+```
+
+**Config:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `columns` | `array` | Column definitions |
+| `columns[].key` | `string` | Property name on each row object |
+| `columns[].label` | `string` | Column header text |
+| `columns[].render` | `function(value, row)` | Optional. Return a string or jQuery element for custom cell rendering |
+| `rows` | `object[]` | Data rows |
+
+**CSS classes available for cell content:**
+
+| Class | Colour | Intended use |
+|-------|--------|-------------|
+| `plugincore-status-enabled` | Green | Enabled / active state |
+| `plugincore-status-disabled` | Red | Disabled / inactive state |
 
 ### Registering nodes for generation
 

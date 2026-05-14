@@ -1,0 +1,229 @@
+
+<div template-section="onIncludeOnce">
+
+<style>
+/* ─── PluginCore Dialog overlay ─────────────────────────────────────────── */
+
+.plugincore-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.plugincore-dialog {
+    background: #fff;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    min-width: 540px;
+    max-width: 85vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Title bar — matches Node-RED's main nav bar colour */
+.plugincore-dialog-titlebar {
+    display: flex;
+    align-items: center;
+    background: #3d3d3d;
+    color: #fff;
+    padding: 6px 8px 6px 12px;
+    flex-shrink: 0;
+}
+
+.plugincore-dialog-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* Close button — jQuery UI styling as used in Node-RED dialogs */
+.plugincore-dialog-close {
+    color: #ccc !important;
+    background: transparent !important;
+    border-color: transparent !important;
+}
+
+.plugincore-dialog-close:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Scrollable body that contains the jQuery UI tab widget */
+.plugincore-dialog-body {
+    flex: 1;
+    overflow: auto;
+    padding: 10px;
+}
+
+/* ─── PluginCore Table ───────────────────────────────────────────────────── */
+
+.plugincore-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.plugincore-table th {
+    background: #f3f3f3;
+    border: 1px solid #ddd;
+    padding: 5px 10px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.plugincore-table td {
+    border: 1px solid #eee;
+    padding: 5px 10px;
+    vertical-align: middle;
+}
+
+.plugincore-table tbody tr:nth-child(even) td {
+    background: #fafafa;
+}
+
+.plugincore-table tbody tr:hover td {
+    background: #f0f6ff;
+}
+
+.plugincore-status-enabled  { color: #27ae60; }
+.plugincore-status-disabled { color: #c0392b; }
+</style>
+
+<script type="text/javascript">
+
+    window.PluginCore = window.PluginCore || {};
+
+    /**
+     * PluginCore.table(config) → jQuery <table>
+     *
+     * config: {
+     *   columns : [{ key, label, render?(value, row) → string | jQuery }],
+     *   rows    : object[]
+     * }
+     */
+    PluginCore.table = function(config) {
+        var $table = $('<table class="plugincore-table">');
+
+        // Header
+        var $thead = $('<thead>');
+        var $hr = $('<tr>');
+        config.columns.forEach(function(col) {
+            $hr.append($('<th>').text(col.label));
+        });
+        $thead.append($hr);
+        $table.append($thead);
+
+        // Body
+        var $tbody = $('<tbody>');
+        (config.rows || []).forEach(function(row) {
+            var $tr = $('<tr>');
+            config.columns.forEach(function(col) {
+                var $td = $('<td>');
+                var val = row[col.key];
+                if (col.render) {
+                    var rendered = col.render(val, row);
+                    if (rendered && typeof rendered === 'object' && rendered.jquery) {
+                        $td.append(rendered);
+                    } else {
+                        $td.html(rendered != null ? String(rendered) : '');
+                    }
+                } else {
+                    $td.text(val != null ? String(val) : '');
+                }
+                $tr.append($td);
+            });
+            $tbody.append($tr);
+        });
+        $table.append($tbody);
+
+        return $table;
+    };
+
+    /**
+     * PluginCore.dialog(options) → { close() }
+     *
+     * options: {
+     *   title : string,
+     *   tabs  : [{ label: string, render($container) }]
+     * }
+     *
+     * Uses jQuery UI tabs for the tab widget (already bundled with Node-RED).
+     * Closes on: close button click, overlay click, or Escape key.
+     */
+    PluginCore.dialog = function(options) {
+        // Only one dialog at a time
+        $('.plugincore-overlay').remove();
+
+        var uid = 'plugincore-' + Date.now();
+
+        var $overlay = $('<div class="plugincore-overlay">');
+        var $dialog  = $('<div class="plugincore-dialog">');
+
+        // ── Title bar ──────────────────────────────────────────────────────
+        var $titlebar = $('<div class="plugincore-dialog-titlebar">');
+        $titlebar.append(
+            $('<span class="plugincore-dialog-title">').text(options.title || '')
+        );
+        var $closeBtn = $(
+            '<button type="button" class="ui-button ui-corner-all ui-widget plugincore-dialog-close" title="Close">' +
+            '<span class="ui-icon ui-icon-closethick"></span></button>'
+        );
+        $titlebar.append($closeBtn);
+
+        // ── Body + jQuery UI tabs ──────────────────────────────────────────
+        var $body   = $('<div class="plugincore-dialog-body">');
+        var $tabsEl = $('<div>').attr('id', uid + '-tabs');
+        var $ul     = $('<ul>');
+
+        (options.tabs || []).forEach(function(tab, i) {
+            var paneId = uid + '-pane-' + i;
+            $ul.append(
+                $('<li>').append($('<a>').attr('href', '#' + paneId).text(tab.label))
+            );
+            var $pane = $('<div>').attr('id', paneId);
+            if (tab.render) { tab.render($pane); }
+            $tabsEl.append($pane);
+        });
+
+        $tabsEl.prepend($ul);
+        $body.append($tabsEl);
+
+        // ── Assemble ───────────────────────────────────────────────────────
+        $dialog.append($titlebar).append($body);
+        $overlay.append($dialog);
+        $('body').append($overlay);
+
+        // Initialise jQuery UI tabs (bundled with Node-RED)
+        $tabsEl.tabs();
+
+        // ── Close logic ───────────────────────────────────────────────────
+        var escNs = 'keydown.plugincore-dialog-' + uid;
+
+        function close() {
+            $overlay.fadeOut(150, function() { $overlay.remove(); });
+            $(document).off(escNs);
+        }
+
+        $closeBtn.on('click', close);
+        $overlay.on('click', function(e) {
+            if ($(e.target).is($overlay)) { close(); }
+        });
+        $(document).on(escNs, function(e) {
+            if (e.key === 'Escape') { close(); }
+        });
+
+        return { close: close };
+    };
+
+</script>
+
+</div>

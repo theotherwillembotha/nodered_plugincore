@@ -24,6 +24,9 @@ export * from "./core/metrics/template/TimerMetricTemplate";
 export * from "./core/tagging/service/NodeTypeService";
 export * from "./core/tagging/NodeDescriptionDecorator";
 
+// UI
+export * from "./core/ui/template/UIHelperTemplate";
+
 // OTHER
 export * from "./core/other/node/DelegatedConfigReferenceNode";
 export * from "./core/other/service/InputService";
