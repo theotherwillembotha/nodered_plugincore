@@ -1,0 +1,50 @@
+
+<div template-section="onIncludeOnce">
+
+<script src="resources/@theotherwillembotha/node-red-plugincore/editorLanguageExtension.js"></script>
+
+<script type="text/javascript">
+
+    window.PluginCore = window.PluginCore || {};
+
+    /**
+     * PluginCore.createScriptEditor(elementId, template, initialValue)
+     *
+     * Creates a Monaco editor instance with TypeScript-aware diagnostics,
+     * completions, and hover info scoped to the provided type template.
+     *
+     * @param {string} elementId   - DOM id of the container element.
+     * @param {string} template    - TypeScript template string. Use `${script}`
+     *                               as the placeholder for the user's code.
+     * @param {string} initialValue - The starting content of the editor.
+     * @returns \{{ getValue(): string, dispose(): void \}}
+     */
+    PluginCore.createScriptEditor = function(elementId, template, initialValue) {
+        var editorInstance = null;
+        var currentValue = initialValue || '';
+
+        ScriptEditorLanguageManager.createLanguage(monaco, template).then(function(language) {
+            editorInstance = monaco.editor.create(document.getElementById(elementId), {
+                value: currentValue,
+                language: language.getName(),
+                automaticLayout: true,
+                wordBasedSuggestions: 'currentDocument',
+            });
+        });
+
+        return {
+            getValue: function() {
+                return editorInstance ? editorInstance.getValue() : currentValue;
+            },
+            dispose: function() {
+                if (editorInstance) {
+                    editorInstance.dispose();
+                    editorInstance = null;
+                }
+            }
+        };
+    };
+
+</script>
+
+</div>

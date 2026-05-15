@@ -179,6 +179,7 @@ Templates bundle reusable UI fragments that compose into any node's editor panel
 | `TimerMetricTemplate` | Timer config node reference |
 | `WebhookTemplate` | Webhook server reference, path, auth, and reverse proxy config |
 | `UIHelperTemplate` | Global `PluginCore.dialog()` and `PluginCore.table()` UI factories (see below) |
+| `ScriptEditorTemplate` | Global `PluginCore.createScriptEditor()` factory for Monaco-based script editors (see below) |
 | `SettingsTemplate` | General settings section |
 | `BasicTemplate` | Base styles shared by all nodes |
 
@@ -264,6 +265,58 @@ $container.append($table);
 |-------|--------|-------------|
 | `plugincore-status-enabled` | Green | Enabled / active state |
 | `plugincore-status-disabled` | Red | Disabled / inactive state |
+
+#### `PluginCore.createScriptEditor(elementId, template, initialValue)`
+
+Including `ScriptEditorTemplate` in a node's `templates` list injects a Monaco-based script editor factory into the Node-RED editor page. It wraps the async Monaco initialisation boilerplate into a single call and returns a `{ getValue(), dispose() }` handle.
+
+```javascript
+// In onIncludeEditPrepare:
+let scriptTemplate = `
+    interface Message { [key: string]: any; }
+    async function(msg: Message) {
+    \${script}
+    }
+`;
+
+node.scriptEditor = PluginCore.createScriptEditor(
+    'node-input-script-editor',         // DOM id of the container element
+    scriptTemplate,                      // TypeScript context template
+    node.script || 'return true;'        // initial value
+);
+
+// In onIncludeEditSave:
+node.script = node.scriptEditor.getValue();
+delete node.scriptEditor;
+
+// In IncludeEditCancel:
+node.scriptEditor.dispose();
+delete node.scriptEditor;
+```
+
+The `template` string provides the TypeScript context that the Monaco language service uses for diagnostics, completions, and hover info. Use `\${script}` as the placeholder for the user's code. The user only sees their code — the surrounding context is invisible to them but informs type checking.
+
+**Returns:** `{ getValue(): string, dispose(): void }`
+
+---
+
+> **Note — Handlebars escaping in node HTML files**
+>
+> Node HTML files (`.html` template files) are processed by Handlebars during the build. This means any `{{ }}` syntax in the HTML — including in JavaScript comments or JSDoc — will be interpreted as a Handlebars expression and produce unexpected output or an error.
+>
+> Escape curly braces with a backslash wherever they appear literally in the file:
+>
+> ```javascript
+> // Wrong — Handlebars will try to evaluate this:
+> // @returns {{ getValue(): string }}
+>
+> // Correct — escaped so Handlebars passes it through:
+> // @returns \{{ getValue(): string \}}
+> ```
+>
+> This applies anywhere in the HTML file: `<script>` blocks, inline styles, markdown documentation sections, and comments.
+
+---
 
 ### Registering nodes for generation
 

@@ -26,6 +26,7 @@ export * from "./core/tagging/NodeDescriptionDecorator";
 
 // UI
 export * from "./core/ui/template/UIHelperTemplate";
+export * from "./core/ui/template/ScriptEditorTemplate";
 
 // OTHER
 export * from "./core/other/node/DelegatedConfigReferenceNode";
