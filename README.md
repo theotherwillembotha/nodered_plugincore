@@ -17,6 +17,8 @@ This framework is the foundation for a growing set of Node-RED plugins. The foll
 |--------|-------------|
 | [@theotherwillembotha/node-red-telemetry](https://github.com/theotherwillembotha/nodered_telemetry) | Ready-to-use flow nodes for structured logging and Prometheus metrics — Logger, Counter, Gauge, and Timer nodes that attach to the config nodes provided by this package. |
 | [@theotherwillembotha/node-red-nginxproxymanager](https://github.com/theotherwillembotha/nodered_nginxproxymanager) | Node-RED nodes for managing Nginx Proxy Manager hosts directly from your flows. Includes a config node that registers as a reverse proxy provider, an Update Host node for creating and updating proxy entries, and a Get Hosts node for retrieving the current host list. |
+| [@theotherwillembotha/node-red-circuitbreaker](https://github.com/theotherwillembotha/nodered_circuitbreaker) | Circuit Breaker nodes for building resilient flows. Detects faults in external integrations using configurable fault and trip functions, routes messages based on breaker state, and supports event-driven recovery flows. |
+| [@theotherwillembotha/node-red-temporal](https://github.com/theotherwillembotha/nodered_temporal) | Date/time transformation nodes powered by the TC39 Temporal API. Parse, convert, adjust, and format date/time values across timezones using named presets or Moment.js-style custom format strings. |
 
 Additional plugins will be listed here as they are published.
 
@@ -315,6 +317,61 @@ The `template` string provides the TypeScript context that the Monaco language s
 > ```
 >
 > This applies anywhere in the HTML file: `<script>` blocks, inline styles, markdown documentation sections, and comments.
+
+---
+
+### Node HTML file — template sections
+
+Each node's `.html` file is divided into named sections using the `template-section` attribute. The build pipeline reads these sections and assembles them into the correct slots in the generated Node-RED registration call. Sections from multiple templates (e.g. `LoggerTemplate`, `MetricsTemplate`) are merged automatically in the order they were registered.
+
+```html
+<script type="text/javascript" template-section="onCompose"> ... </script>
+<div template-section="onIncludeOnce"> ... </div>
+<script type="text/javascript" template-section="onIncludeEditPrepare"> ... </script>
+<script type="text/html" template-section="onIncludeEditForm"> ... </script>
+<script type="text/javascript" template-section="onIncludeEditSave"> ... </script>
+<script type="text/javascript" template-section="onIncludeEditCancel"> ... </script>
+<script type="text/javascript" template-section="onIncludeEditDelete"> ... </script>
+<script type="text/markdown" template-section="onIncludeDocumentation"> ... </script>
+```
+
+#### Section reference
+
+| Section | When it runs | Typical use |
+|---------|-------------|-------------|
+| `onCompose` | At **build time**, inside a `NodeBuilder` context | Call `node.addDefault(...)`, `node.setLabel(...)`, `node.setColor(...)`, `node.setIcon(...)`, `node.addOutputs(...)`, etc. to configure the node definition that will be written into the generated `Nodes.js`. This section is **not** shipped to the browser. |
+| `onIncludeOnce` | Injected into the browser **once** per page load | Global styles (`<style>`), shared helper functions, and cached resource fetches (e.g. timezone or format lists). Everything here is shared across all node instances of this type. Wrap scripts in `<script>` tags inside a `<div>`. |
+| `onIncludeEditPrepare` | Runs when the **node editor dialog opens** (Node-RED `oneditprepare`) | Initialise `typedInput` widgets, bind event listeners, fetch async data, restore saved state. `this` refers to the node being edited — assign it to a local variable (e.g. `let node = this`) before any async code. |
+| `onIncludeEditForm` | The **HTML form** rendered inside the editor dialog | `<div class="form-row">` blocks containing `<label>` and `<input>` elements. Use `id="node-input-<fieldName>"` for regular nodes or `id="node-config-input-<fieldName>"` for config nodes. Include hidden `<input type="hidden">` fields for `typedInput` type tracking. |
+| `onIncludeEditSave` | Runs when the user clicks **Done** (Node-RED `oneditsave`) | Read widget values back into the node object before it is serialised. Most `typedInput` widgets save automatically via the `node-input-*` naming convention; use this section for anything that does not. |
+| `onIncludeEditCancel` | Runs when the user clicks **Cancel** (Node-RED `oneditcancel`) | Clean up resources that were created in `onIncludeEditPrepare` — e.g. call `.dispose()` on Monaco editor instances to avoid memory leaks. |
+| `onIncludeEditDelete` | Runs when the node is **deleted** from the canvas | Release any persistent resources tied to this node instance. Rarely needed for most nodes. |
+| `onIncludeDocumentation` | Rendered in the Node-RED **help panel** (sidebar Info tab) | Markdown content describing the node's behaviour, fields, and examples. Supports standard GitHub-flavoured markdown including tables, code blocks, and blockquotes. |
+
+#### `onCompose` — NodeBuilder API
+
+The `onCompose` script runs at build time with `node` bound to a `NodeBuilder` instance. The following methods are available:
+
+| Method | Description |
+|--------|-------------|
+| `node.addDefault(name, options)` | Register a config field. `options`: `{ value, required, validate? }`. The optional `validate` function is serialised as-is into the generated `defaults` block and runs in the browser editor. |
+| `node.setLabel(fn)` | Set a function that returns the node's palette label at runtime. |
+| `node.setPaletteLabel(label)` | Set the fixed palette label. |
+| `node.setColor(color)` | Set the node's palette colour (hex string). |
+| `node.setIcon(icon)` | Set the node's palette icon filename (relative to the plugin's `icons/` directory). |
+| `node.setLabelStyle(style)` | Set the CSS class for the palette label (e.g. `node_label_white`). |
+| `node.setInput(label)` | Add an input port with the given label. |
+| `node.addOutputs(labels)` | Add one or more output ports. Pass a string array for multiple labelled outputs. |
+
+#### Data flow through the edit lifecycle
+
+```
+oneditprepare  →  [user edits]  →  oneditsave   (Done clicked)
+                                →  oneditcancel  (Cancel clicked)
+                                →  oneditdelete  (node deleted)
+```
+
+Values flow through `node-input-<field>` (or `node-config-input-<field>`) named inputs. Node-RED automatically saves and restores these between sessions. Fields not following this convention must be manually read in `onIncludeEditSave` and written in `onIncludeEditPrepare`.
 
 ---
 

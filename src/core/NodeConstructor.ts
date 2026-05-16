@@ -568,6 +568,7 @@ export type DefaultTemplateType = {
     required:boolean;
     minInstances?:number;
     maxInstances?:number;
+    validate?:Function;
 }
 
 export class NodeBuilder {
@@ -714,6 +715,9 @@ export class NodeBuilder {
             }
             case "string": {
                 return `'${value}'`
+            }
+            case "function": {
+                return (value as Function).toString();
             }
             case "object": {
                 if(Array.isArray(value)){
