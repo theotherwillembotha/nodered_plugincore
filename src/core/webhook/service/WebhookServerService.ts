@@ -5,7 +5,7 @@ import { WebhookServerConfigNode } from "../node/WebhookServerConfigNode";
 import { WebhookTemplate } from "../template/WebhookTemplate";
 import express, {Express, Request, Response} from "express";
 import { Server } from "http";
-import { ApiKeyMechanismType, RestAuthType } from "../../logger/service/LoggerServiceTypes";
+import { ApiKeyMechanismType, RestAuthType } from "../../logger/service/LoggerService";
 
 var bodyParser = require('body-parser');
 

@@ -16,9 +16,11 @@ This framework is the foundation for a growing set of Node-RED plugins. The foll
 | Plugin | Description |
 |--------|-------------|
 | [@theotherwillembotha/node-red-telemetry](https://github.com/theotherwillembotha/nodered_telemetry) | Ready-to-use flow nodes for structured logging and Prometheus metrics — Logger, Counter, Gauge, and Timer nodes that attach to the config nodes provided by this package. |
+| [@theotherwillembotha/node-red-loki](https://github.com/theotherwillembotha/nodered_loki) | Grafana Loki logger config node. Extends the logging infrastructure provided by this package with a Loki transport, enabling log delivery directly to a Loki instance from any node built with the `@Logger` decorator. |
 | [@theotherwillembotha/node-red-nginxproxymanager](https://github.com/theotherwillembotha/nodered_nginxproxymanager) | Node-RED nodes for managing Nginx Proxy Manager hosts directly from your flows. Includes a config node that registers as a reverse proxy provider, an Update Host node for creating and updating proxy entries, and a Get Hosts node for retrieving the current host list. |
 | [@theotherwillembotha/node-red-circuitbreaker](https://github.com/theotherwillembotha/nodered_circuitbreaker) | Circuit Breaker nodes for building resilient flows. Detects faults in external integrations using configurable fault and trip functions, routes messages based on breaker state, and supports event-driven recovery flows. |
 | [@theotherwillembotha/node-red-temporal](https://github.com/theotherwillembotha/nodered_temporal) | Date/time transformation nodes powered by the TC39 Temporal API. Parse, convert, adjust, and format date/time values across timezones using named presets or Moment.js-style custom format strings. |
+| [@theotherwillembotha/node-red-zookeeper](https://github.com/theotherwillembotha/nodered_zookeeper) | Apache ZooKeeper integration nodes. Subscribe to ZooKeeper node change events, read node values on demand, and write data to ZooKeeper nodes from your flows. |
 
 Additional plugins will be listed here as they are published.
 
@@ -42,7 +44,7 @@ Config nodes are shared resources configured once and referenced across your flo
 
 #### Logging
 
-Three logger backends are supported. All expose the same interface and are interchangeable — any node built with the `@Logger` decorator can use any of them.
+Two logger backends are built in. Additional backends are available as separate plugins (see the [plugin ecosystem](#plugin-ecosystem) table above). All expose the same interface and are interchangeable — any node built with the `@Logger` decorator can use any of them.
 
 **Console Logger** — writes structured log output to stdout via Winston. Ideal for development and containerised deployments that forward stdout to a log aggregator.
 
@@ -52,11 +54,7 @@ Three logger backends are supported. All expose the same interface and are inter
 
 ![REST Logger Config](documentation/RestLoggerConfigNode.png)
 
-**Loki Logger** — pushes log entries to a Grafana Loki instance via the Loki HTTP API. Supports multi-tenant deployments via the Tenant ID field.
-
-![Loki Logger Config](documentation/LokiLoggerConfigNode.png)
-
-All three loggers share a **Level** selector (debug, info, warn, error) and a **Template** field — a Handlebars template that controls the shape of each log entry. The default `message:{{msg}}` passes the raw message through; you can customise it to include only the fields you care about.
+All loggers share a **Level** selector (debug, info, warn, error) and a **Template** field — a Handlebars template that controls the shape of each log entry. The default `message:{{msg}}` passes the raw message through; you can customise it to include only the fields you care about.
 
 #### Metrics
 
@@ -383,7 +381,7 @@ Create a `GenerateNodes.ts` at the root of your `src/` directory. This is the co
 import { NodeGenerator } from "@theotherwillembotha/node-red-plugincore";
 import {
     LoggerService, LoggerTemplate,
-    ConsoleLoggerConfigNode, RestLoggerConfigNode, LokiLoggerConfigNode
+    ConsoleLoggerConfigNode, RestLoggerConfigNode
 } from "@theotherwillembotha/node-red-plugincore";
 import { MyNode } from "./nodes/MyNode";
 
@@ -392,7 +390,6 @@ new NodeGenerator("./src/")
     .registerTemplate(LoggerTemplate)
     .registerNode(ConsoleLoggerConfigNode)
     .registerNode(RestLoggerConfigNode)
-    .registerNode(LokiLoggerConfigNode)
     .registerNode(MyNode)
     .generate("./build/Nodes", "./build/Plugins");
 

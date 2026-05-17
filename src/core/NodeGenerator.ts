@@ -211,7 +211,7 @@ module.exports = function (RED) {
                 RED.events.on('runtime-event', async (event) => {
                     // startup deployment.
                     if ("runtime-deploy" === event?.id && startupDeployment) {
-                        console.log("STARTUP DEPLOYMENT");
+                        //console.log("STARTUP DEPLOYMENT");
                         startupDeployment = false;
                         const flows = await runtime.flows.getFlows({});
                         await plugin.instance.onDeploy(flows);
@@ -219,7 +219,7 @@ module.exports = function (RED) {
                     
                     // stopping flows on redeployment.
                     if ("runtime-state" === event?.id && event?.payload?.state === "stop" && event?.payload?.deploy) {
-                        console.log("REDEPLOY!");
+                        //console.log("REDEPLOY!");
                         const flows = await runtime.flows.getFlows({});
                         await plugin.instance.onDeploy(flows);
                     }

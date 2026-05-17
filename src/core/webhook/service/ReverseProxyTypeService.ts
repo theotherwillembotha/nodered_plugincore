@@ -24,10 +24,6 @@ export interface ProxyManagerClient {
     getHosts():Promise<Partial<HostEntry>[]>;
 }
 
-export abstract class ReverseProxyClient {
-
-}
-
 export type HostEntry = {
     id:number,
     domainNames:string[],

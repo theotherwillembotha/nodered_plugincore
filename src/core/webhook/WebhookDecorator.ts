@@ -1,4 +1,4 @@
-import { RestAuthType } from "../logger/service/LoggerServiceTypes";
+import { RestAuthType } from "../logger/service/LoggerService";
 import { BaseNode, createPostConstructDecorator, NodeManager } from "../NodeConstructor";
 import { ProxyManagerClient } from "./service/ReverseProxyTypeService";
 import { ApiKeyAuthenticationConfig, BasicAuthenticationConfig, EndpointConfig, EndpointMethodType, NoAuthenticationConfig, WebhookServer } from "./service/WebhookServerService";
@@ -45,8 +45,6 @@ const Webhook = createPostConstructDecorator<WebhookConfig>('Webhook')
                     let proxyClient = reverseProxyNode.client() as ProxyManagerClient;
 
                     console.log("List of known hosts: ", await proxyClient.getHosts());
-
-
                     //console.log("ADD REVERSE PROXY:" + proxy.proxy + " to " + node.id(), proxyClient);
                 }
                 catch(e){

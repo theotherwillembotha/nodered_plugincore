@@ -432,7 +432,7 @@ export class NodeManager{
         }
 
         let nodeConstructor = function(this: any, config: BaseNodeConfig | NodeDef){
-            console.log("constructing node", typeName);
+            //console.log("constructing node", typeName);
 
             try{
                 // instantiate the node.

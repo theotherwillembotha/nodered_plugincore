@@ -1,7 +1,7 @@
 import { BaseNodeConfig, Template, TemplateDescriptor } from "../../NodeConstructor"
 import { WebhookServerConfigNode } from "../node/WebhookServerConfigNode";
 import { SourceUtility } from "../../NodeGenerator";
-import { ApiKeyMechanismType, RestAuthType } from "../../logger/service/LoggerServiceTypes";
+import { RestAuthType, ApiKeyMechanismType } from "../../logger/service/LoggerService";
 
 export interface WebhookTemplateConfig extends BaseNodeConfig{
     webhook:string,

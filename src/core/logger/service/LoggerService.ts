@@ -1,15 +1,9 @@
 
-import {BaseService, ServiceDescriptor } from "../../NodeConstructor";
-import { NodeAPI, NodeAPISettingsWithData } from "node-red";
+import {BaseService, ServiceDescriptor, ConfigNodeConfig, ConfigNode } from "../../NodeConstructor";
+import { NodeAPI, NodeAPISettingsWithData, Node } from "node-red";
 import Handlebars from "handlebars";
-import { createLogger, format, transports } from "winston";
-import LokiTransport from "winston-loki";
-import { URLRecord, parseURL } from 'whatwg-url';
-import { LoggerTemplate } from "../template/LoggerTemplate";
+import { LoggerTemplate, LoggerTemplateConfig } from "../template/LoggerTemplate";
 var network = require('network');
-import deepEqual from "deep-equal";
-import { HttpTransportOptions } from "winston/lib/winston/transports";
-import { ApiKeyMechanismType, Level, PlatformType, RestAuthType } from "./LoggerServiceTypes";
 
 // helper for serializing json objects inside handlebars tags.
 // you can then convert it like this: {{{json myobject}}}
@@ -17,248 +11,108 @@ Handlebars.registerHelper('json', function(context) {
     return JSON.stringify(context);
 });
 
-type TagMap = { 
-    instance: string; 
-    flow: string; 
+export enum Level{
+    DEBUG = "DEBUG",
+    INFO = "INFO",
+    WARNING = "WARNING",
+    ERROR = "ERROR"
+}
+
+export enum RestAuthType {
+    none="none",
+    basic="basic",
+    apikey="apikey",
+}
+
+export enum ApiKeyMechanismType {
+    header="header",
+    queryparam="queryparam",
+    matrixparam="matrixparam",
+}
+
+export type TagMap = { 
+    id: string; 
     node: string; 
     type: string; 
-    id: string; 
+    flow: string; 
+    instance: string; 
 }
 
-export type Log = {
-    log(message:{[key:string]:any}|string):void;
-}
+export abstract class Log  {
+    private _config: LoggerTemplateConfig;
+    private template: HandlebarsTemplateDelegate<any>;
+    private tags:TagMap;
 
-export class LogImplementation implements Log {
-    
-    private root: NewLogger<any>; 
-    private config:LoggerRegistration;
-    private template?:HandlebarsTemplateDelegate<any>;
-    private tagMap:TagMap;
-    
-    constructor(root:NewLogger<any>, config:LoggerRegistration){
-        this.root = root;
-        this.config = config;
-        this.template = (config.override && config.template) ? Handlebars.compile(config.template) : undefined;
-        this.tagMap = {
-            instance:LoggerService.instanceID,
-            flow:config.flow,
-            node:config.name,
-            type:config.type,
-            id:config.id,
-        };
-    }
-
-    public log(message:{[key:string]:any}|string){
-        // enrich the logged content with additional properties.
-        let content = {
-            currentTime: new Date().toISOString(),
-            msg: message,
+    protected constructor(config:LoggerTemplateConfig){
+        this._config = config;
+        this.template = Handlebars.compile(config.template);
+        this.tags = {
+            id: config.id,
+            node: config.name,
+            type: config.type,
+            flow: config.flow,
+            instance: LoggerService.instanceID
         }
-
-        // send typ the logger.
-        this.root.log(this, content);
     }
 
-    public serialize(content:{[key:string]:any}) {
-        return !!this.template ? this.template(content) : this.root.serialize(content);
+    protected config():LoggerTemplateConfig{
+        return this._config;
     }
 
-    public getTags() {
-        return this.tagMap;
+    public log(payload:{[key:string]:any}|string):void{
+        try{
+            // step 1. serialize the payload using the template engine.
+            let message = (payload instanceof String) ? payload as string : this.template({msg:payload});
+
+            // step 2. write to the log appender.
+            this.writeToLog(this.config().level, message, this.tags);
+        }
+        catch(e){
+            console.log(e);
+        }
     }
+    
+    protected abstract writeToLog(level:string, message:string, tags:{[key:string]:string|boolean|number}):void;
 }
 
-export interface BaseLoggerConfig {
+export type BaseLoggerConfig = {
     id:string;
-    type:PlatformType;
+    type:string;
     level: Level;
     template:string;
 }
 
-export abstract class NewLogger<ConfigType extends BaseLoggerConfig> {
-    private _config: ConfigType;
-    private template: HandlebarsTemplateDelegate<string>;
-
-    constructor(config:ConfigType){
+export abstract class AbstractLogger<BaseLoggerConfig>{
+    
+    private _config: BaseLoggerConfig;
+    private _appenders:{[key:string]:Log} = {};
+    
+    constructor(config:BaseLoggerConfig){
         this._config = config;
-        this.template = Handlebars.compile(config.template);
     }
 
-    public log(reference:LogImplementation, content:{[key:string]:any}) {
-        try{
-            // step 1, attempt to serialize the content.
-            let serializedContent = reference.serialize(content);
-
-            // step 2, get the tags.
-            let tags = reference.getTags();
-
-            // step 3. write to the logger.
-            this.writeToLog(serializedContent, tags);
-        }
-        catch(exception){
-            console.log((exception as any).message);
-        }
-    }
-
-    public register(registration:LoggerRegistration):Log{
-        return new LogImplementation(this, registration);
-    }
-
-    public serialize(content: any) {
-        return this.template(content);
-    }
-
-    public config():ConfigType {
+    public config():BaseLoggerConfig{
         return this._config;
     }
 
-    protected abstract writeToLog(serializedContent: string, tags: TagMap):void;
-}
-
-export interface ConsoleLoggerConfig extends BaseLoggerConfig  {
-
-}
-
-class ConsoleLogger extends NewLogger<ConsoleLoggerConfig> {
-
-    constructor(config:ConsoleLoggerConfig){
-        super(config);
-    }
-
-    protected writeToLog(serializedContent: string, tags: TagMap): void {
-        console.log(tags, serializedContent);
-    } 
-}
-
-export interface LokiLoggerConfig extends BaseLoggerConfig{
-    type:PlatformType.loki;
-    host:string;
-    userid?:string;
-    authtoken?:string;
-    tenantid?:string;
-}
-
-class LokiLogger extends NewLogger<LokiLoggerConfig>{
-    logger: any;
-
-    constructor(config:LokiLoggerConfig){
-        super(config);
+    public registerTemplate(config: LoggerTemplateConfig): Log{
+        let appender:Log = this._appenders[config.id];
+        if(appender){
+            return appender;
+        }
         
-        let transportConfig = {
-            host: config.host,
-            json: true,
-            format: format.json(),
-            headers: {
-                "X-Scope-OrgID": (config.tenantid) ? config.tenantid : undefined
-            },
-            replaceTimestamp: true,
-            onConnectionError: (err:unknown) => console.error(err),
-            basicAuth: (config.userid && config.authtoken) 
-                ? `${config.userid}:${config.authtoken}`
-                : undefined
-        }
+        let _this = this;
 
-        this.logger = createLogger({
-            level: this.config().level.toString().toLowerCase(),
-            format: format.json(),
-            defaultMeta: {},
-            transports: [
-              new LokiTransport(transportConfig),
-            ],
-        });
+        this._appenders[config.id] = appender = this.createLogger(config);
+        return appender;
     }
 
-    protected writeToLog(serializedContent: string, tags: TagMap): void {
-        this.logger.log({message:serializedContent, level:this.logger.level, labels:tags});
-    }
-}
-
-export interface RestLoggerConfig extends BaseLoggerConfig{
-    type:PlatformType.rest;
-    url: string;
-    ignoresslerror:boolean;
-    auth_type: RestAuthType;
-    auth_basic_username:string;
-    auth_basic_password:string;
-    auth_apikey_mechanism:ApiKeyMechanismType;
-    auth_apikey_name:string;
-    auth_apikey_value:string;
-}
-
-class RestLogger extends NewLogger<RestLoggerConfig>{
-    logger: any;
-
-    constructor(config:RestLoggerConfig){
-        super(config);
-
-        let hosturl:URLRecord|null = parseURL(config.url);
-    
-        if(!hosturl){
-            throw Error("could not parse url: " + config.url);
-        }
-
-        let httpOptions:{[key:string]:any} = {}
-
-        let httpParams:HttpTransportOptions = {
-            host:hosturl.host?.toString(),
-            path:"/" + (hosturl.path ? [...hosturl.path].join("/") : "") + (hosturl.query ? ("?" + hosturl.query) : ""),
-            port:(hosturl.port) ? hosturl.port : undefined,
-            ssl:hosturl.scheme.toLowerCase() === "https",
-            headers: {},
-        };
-        (httpParams as any).options = httpOptions;
-
-        if(config.ignoresslerror){
-            httpOptions.rejectUnauthorized = false;
-        }
-
-        if(config.auth_type === RestAuthType.none){}
-
-        if(config.auth_type === RestAuthType.basic){
-            httpParams.auth = {
-                username: config.auth_basic_username,
-                password: config.auth_basic_password
-            }
-        }
-        if(config.auth_type === RestAuthType.apikey){
-            if(config.auth_apikey_mechanism === ApiKeyMechanismType.header) {
-                (httpParams.headers as any)[config.auth_apikey_name] = config.auth_apikey_value;
-            }
-            if(config.auth_apikey_mechanism === ApiKeyMechanismType.matrixparam) {
-                httpParams.path = httpParams.path?.replace(`:${config.auth_apikey_name}`, config.auth_apikey_value);
-            }
-            if(config.auth_apikey_mechanism === ApiKeyMechanismType.queryparam) {
-                httpParams.path = httpParams.path + (httpParams.path?.includes("?") ? "&" : "?") + config.auth_apikey_name + "=" + config.auth_apikey_value;
-            }
-        };
-
-        this.logger = createLogger({
-            level: config.level.toString().toLowerCase(),
-            format: format.json(),
-            defaultMeta: {},
-            transports: [
-                new transports.Http(httpParams),
-            ],
-        });
-    }
-
-    protected writeToLog(serializedContent: string, tags: TagMap): void {
-        this.logger.log({level:this.logger.level, message:serializedContent, labels:tags});
-    }
-}
-
-let LoggerTypes:{[key:string]:any} = {
-    console: ConsoleLogger,
-    loki: LokiLogger,
-    rest: RestLogger
+    protected abstract createLogger(config: LoggerTemplateConfig):Log;
 }
 
 export class LoggerService extends BaseService {
 
     public static instanceID:string;
-
-    private static loggers:{[key:string]:NewLogger<BaseLoggerConfig>} = {};
     private red!: NodeAPI<NodeAPISettingsWithData>;
 
     constructor(){
@@ -277,22 +131,6 @@ export class LoggerService extends BaseService {
 
     public deinit(red: NodeAPI<NodeAPISettingsWithData>): void | Promise<void> {}
 
-    public static get <ConfigType extends BaseLoggerConfig>(config:ConfigType): NewLogger<ConfigType>{
-
-        let logger:NewLogger<ConfigType>  = this.loggers[config.id] as NewLogger<ConfigType>;
-
-        if(logger){
-            if(!deepEqual(config, logger.config())){
-                this.loggers[config.id] = (logger = new (LoggerTypes[config.type])(config));
-            }
-        }
-        else{
-            this.loggers[config.id] = (logger = new (LoggerTypes[config.type])(config));
-        }
-
-        return logger;
-    }
-
     static override getServiceDescriptor():ServiceDescriptor {
         return new ServiceDescriptor(
             "@theotherwillembotha/loggerservice",
@@ -305,12 +143,38 @@ export class LoggerService extends BaseService {
     }
 }
 
-export type LoggerRegistration = {
-    id:string;
-    flow:string;
-    type:string;
-    name:string;
-    enabled:boolean;
-    template?:string;
-    override?:boolean;
+export type LoggerConfigNodeConfig = ConfigNodeConfig & BaseLoggerConfig & {}
+
+export abstract class LoggerConfigNode<CNC extends LoggerConfigNodeConfig, LoggerType extends AbstractLogger<BaseLoggerConfig>> extends ConfigNode<CNC> {
+    
+    protected constructor(node:Node, config: CNC){
+        super(node, config);
+    }
+
+    protected abstract logger():LoggerType;
+    
+    public registerTemplate(config: LoggerTemplateConfig): Log {
+        return this.logger().registerTemplate(config);
+    }
+}
+
+export class DoNothingAppender extends Log{
+
+    private static instance:DoNothingAppender = new DoNothingAppender();
+
+    static get(): any {
+      return DoNothingAppender.instance;
+    }
+
+    private constructor(){
+        super({flow:"",id:"", level:"", name:"", template:"", type:""});
+    }
+
+    public log(payload:{[key:string]:any}|string):void{
+        // do nothing.
+    }
+
+    protected writeToLog(level:string, message: string, tags: { [key: string]: string | boolean | number; }): void {
+        // do nothing.
+    }
 }

@@ -1,13 +1,11 @@
 
 import { Node } from "node-red";
-import { ConfigNode, ConfigNodeConfig } from "../../NodeConstructor"
-import { NewLogger, Log, LoggerRegistration, LoggerService } from "../service/LoggerService"
+import { LoggerService, LoggerConfigNodeConfig, BaseLoggerConfig, AbstractLogger, TagMap, LoggerConfigNode, Log, Level } from "../service/LoggerService"
 import { SourceUtility } from "../../NodeGenerator";
-import { Level, PlatformType } from "../service/LoggerServiceTypes";
 import { NodeDescription } from "../../tagging/NodeDescriptionDecorator";
+import { LoggerTemplateConfig } from "../template/LoggerTemplate";
 
-interface ConsoleLoggerConfigNodeConfig extends ConfigNodeConfig {
-    id: string;
+interface ConsoleLoggerConfigNodeConfig extends LoggerConfigNodeConfig {
     level:Level;
     template:string;
 }
@@ -21,26 +19,53 @@ interface ConsoleLoggerConfigNodeConfig extends ConfigNodeConfig {
     dependencies:[ LoggerService ],
     tags: [ "LoggerType" ]
 })
-export class ConsoleLoggerConfigNode extends ConfigNode<ConsoleLoggerConfigNodeConfig> {
+export class ConsoleLoggerConfigNode extends LoggerConfigNode<ConsoleLoggerConfigNodeConfig, ConsoleLogger> {
     
-    private _logger!: NewLogger<any>;
+    private _logger!: ConsoleLogger;
     
     constructor(node: Node, config: ConsoleLoggerConfigNodeConfig){
         super(node, config);
         let _this = this;
 
-        // instantiate the logger.
-        let loggerConfig = {
+        // create logger config
+        let loggerConfig:ConsoleLoggerConfig = {
             id:this.id(),
-            type:PlatformType.console,
-            template:config.template,
+            type:"CONSOLE",
             level:config.level,
+            template:config.template,
         }
 
-        this._logger = LoggerService.get(loggerConfig);
+        // create logger instance:
+        this._logger = new ConsoleLogger(loggerConfig);
     }
 
-    public registerLogger(registration:LoggerRegistration):Log {
-        return this._logger.register(registration)
+    protected logger():ConsoleLogger{
+        return this._logger;
+    }
+}
+
+export interface ConsoleLoggerConfig extends BaseLoggerConfig  {
+    // no additional values.
+}
+
+class ConsoleLogger extends AbstractLogger<ConsoleLoggerConfig> {
+
+    constructor(config:ConsoleLoggerConfig){
+        super(config);
+    }
+
+    protected createLogger(config: LoggerTemplateConfig): Log {
+        return new ConsoleAppender(config);
+    }
+}
+
+class ConsoleAppender extends Log {
+
+    constructor(config:LoggerTemplateConfig){
+        super(config);
+    }
+
+    protected writeToLog(level:string, message: string, tags: { [key: string]: string | boolean | number; }): void {
+        console.log(new Date().toISOString(), this.config().id, level, tags, message)
     }
 }
