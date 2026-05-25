@@ -22,6 +22,7 @@ export abstract class ReverseProxyType {
 export interface ProxyManagerClient {
     updateHost(data: Partial<HostEntry>):Promise<void>;
     getHosts():Promise<Partial<HostEntry>[]>;
+    deleteHost(id: number):Promise<void>;
 }
 
 export type HostEntry = {

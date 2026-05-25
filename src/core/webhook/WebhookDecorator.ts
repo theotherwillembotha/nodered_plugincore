@@ -1,6 +1,7 @@
+import os from "os";
 import { RestAuthType } from "../logger/service/LoggerService";
 import { BaseNode, createPostConstructDecorator, NodeManager } from "../NodeConstructor";
-import { ProxyManagerClient } from "./service/ReverseProxyTypeService";
+import { HTTPScheme, ProxyManagerClient } from "./service/ReverseProxyTypeService";
 import { ApiKeyAuthenticationConfig, BasicAuthenticationConfig, EndpointConfig, EndpointMethodType, NoAuthenticationConfig, WebhookServer } from "./service/WebhookServerService";
 import { WebhookTemplateConfig } from "./template/WebhookTemplate";
 
@@ -9,6 +10,14 @@ type WebhookConfig = {
     name?:string,
     methods:EndpointMethodType[],
 }
+
+type ManagedProxyHost = {
+    proxyNodeId: string;
+    hostId: number;
+}
+
+// In-memory registry: nodeId → managed proxy host entries from the last deploy.
+const managedProxyHosts = new Map<string, ManagedProxyHost[]>();
 
 const Webhook = createPostConstructDecorator<WebhookConfig>('Webhook')
     .withInitLogic(async (instance, propertyKey, webhookconfig:WebhookConfig) => {
@@ -35,24 +44,58 @@ const Webhook = createPostConstructDecorator<WebhookConfig>('Webhook')
 
         if(nodeConfig.reverseProxies_enabled){
 
+            let targetPort = webhookServer.config().port;
+            let targetHost = os.hostname();
+            let nodeId = nodeConfig.id;
+            let newlyManaged: ManagedProxyHost[] = [];
+
             await Promise.all(nodeConfig.reverseProxies_connections.map(async proxy => {
-
                 try{
-                    // get a n instance of reverseProxNode.
-                    let reverseProxyNode = (NodeManager.RED.nodes.getNode(proxy.proxy) as any).node();
-
                     // TODO: ReverseProxyConfigNodes need to become their own subtype of config nodes so we can enforce the ".client()" method.
+                    let reverseProxyNode = (NodeManager.RED.nodes.getNode(proxy.proxy) as any).node();
                     let proxyClient = reverseProxyNode.client() as ProxyManagerClient;
 
-                    console.log("List of known hosts: ", await proxyClient.getHosts());
-                    //console.log("ADD REVERSE PROXY:" + proxy.proxy + " to " + node.id(), proxyClient);
+                    let hosts = await proxyClient.getHosts();
+                    let matchingHost = hosts.find(h => h.domainNames?.includes(proxy.domainname));
+
+                    if (!matchingHost) {
+                        await proxyClient.updateHost({ domainNames: [proxy.domainname], forwardHost: targetHost, forwardPort: targetPort, scheme: HTTPScheme.HTTP });
+                        // Fetch again to get the assigned ID of the newly created entry.
+                        let updatedHosts = await proxyClient.getHosts();
+                        matchingHost = updatedHosts.find(h => h.domainNames?.includes(proxy.domainname));
+                    }
+                    else if (matchingHost.forwardHost !== targetHost || matchingHost.forwardPort !== targetPort) {
+                        await proxyClient.updateHost({ id: matchingHost.id, forwardHost: targetHost, forwardPort: targetPort, scheme: HTTPScheme.HTTP });
+                    }
+
+                    if (matchingHost?.id !== undefined) {
+                        newlyManaged.push({ proxyNodeId: proxy.proxy, hostId: matchingHost.id });
+                    }
                 }
                 catch(e){
-                    console.log(e);
+                    console.error(e);
                 }
-
-                return Promise.resolve();
             }));
+
+            // Remove any stale proxy host entries that were managed last deploy but are no longer in the current config.
+            let previouslyManaged = managedProxyHosts.get(nodeId) ?? [];
+            let newHostIds = new Set(newlyManaged.map(m => m.hostId));
+
+            await Promise.all(previouslyManaged
+                .filter(m => !newHostIds.has(m.hostId))
+                .map(async stale => {
+                    try{
+                        let reverseProxyNode = (NodeManager.RED.nodes.getNode(stale.proxyNodeId) as any).node();
+                        let proxyClient = reverseProxyNode.client() as ProxyManagerClient;
+                        await proxyClient.deleteHost(stale.hostId);
+                    }
+                    catch(e){
+                        console.error(e);
+                    }
+                })
+            );
+
+            managedProxyHosts.set(nodeId, newlyManaged);
         }
 
         // register a close listener to the node.

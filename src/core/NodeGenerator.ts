@@ -195,7 +195,6 @@ module.exports = function (RED) {
             let plugin = RED.plugins.get(pluginID);
 
             if(addedPlugin && plugin.instantiate && !plugin.instance){
-                console.log("Deploying instance of: " + plugin.id);
                 plugin.instance = new plugin.class();
                 
                 // instantiate the plugin.

@@ -9,7 +9,6 @@ import beautify from 'js-beautify';
 import markdownit from 'markdown-it'
 import Handlebars, { template } from "handlebars";
 import { NodeTypeService } from "./tagging/service/NodeTypeService";
-import { NodeDescriptionConfig } from "./tagging/NodeDescriptionDecorator";
 
 
 
@@ -400,12 +399,7 @@ export class NodeManager{
 
         // check if the reverserproxyttypesewrvice is installed yet.
         this.nodeTypeService  = (RED.plugins.get("@theotherwillembotha/nodetypeservice") as any).instance as NodeTypeService;
-        if(this.nodeTypeService) { 
-            console.log("NodeTypeService installed!")
-        }
-        else {
-            // Register a listener to trigger when the RegerseProxyTypService gets installed.
-            console.log("nodetypeservice not installed yet. waiting for it to be installed");
+        if(!this.nodeTypeService) {
             RED.events.on('plugin.instantiated', nodeTypeServiceListener);
         }
     }
@@ -462,7 +456,6 @@ export class NodeManager{
         }
 
         try{
-            console.log("registering node " + typeName);
             NodeManager.RED.nodes.registerType(typeName, nodeConstructor, { settings: {}});
 
             let nodeDescription = type.getNodeDescriptor();
@@ -477,7 +470,6 @@ export class NodeManager{
                 this.typeBacklog.push(type);
             }
 
-            console.log("registered node " + typeName);
         }
         catch(error){
             console.error("registering node: " + typeName + " failed", error);
@@ -569,6 +561,7 @@ export type DefaultTemplateType = {
     minInstances?:number;
     maxInstances?:number;
     validate?:Function;
+    list?:boolean;
 }
 
 export class NodeBuilder {
@@ -598,12 +591,12 @@ export class NodeBuilder {
     }
 
     public addDefault(name:string, template:DefaultTemplateType):NodeBuilder{
-        // if the template type ends with squeare brackets, its an array type.
-        if(template.type && template.type.endsWith("[]")) {
+        // if list:true, this is an array of config references — generate shadow defaults for each slot.
+        if(template.list === true) {
             template.maxInstances =  template.maxInstances ? template.maxInstances : 10;
-            this._defaults[name] = {type:template.type, value:"", required:true, maxInstances:template.maxInstances};
+            this._defaults[name] = {value:"", required:(template.required) ? template.required : false, maxInstances:template.maxInstances};
             for(let i = 0; i < template.maxInstances; i++){
-                this._defaults["_" + name + "_" + i] = {value:"", required:false};
+                this._defaults["_" + name + "_" + i] = {value:"", required:false, type: template.type};
             }
         }
         else{

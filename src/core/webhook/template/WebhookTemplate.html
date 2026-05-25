@@ -11,7 +11,7 @@ node
     .addDefault('webhookAuth_apikey_key', {value:"x-api-key", required:false})
     .addDefault('webhookAuth_apikey_value', {value:"testkey", required:false})
     .addDefault('reverseProxies_enabled', {required:false})
-    .addDefault('reverseProxies_connections', { type:"ReverseProxyType[]", maxInstances:10})
+    .addDefault('reverseProxies_connections', { type:"DelegatedConfigReferenceNode", list:true, maxInstances:10})
 </script>
 
 <div template-section="onIncludeOnce">

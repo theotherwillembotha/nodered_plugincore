@@ -95,7 +95,6 @@ export class WebhookServer {
             this._app.post(endpoint.path, handlerChain);
         }
 
-        console.log("added endpoint to " + endpoint.path);
     }
 
     public detach(configuration:EndpointConfig){
@@ -116,8 +115,6 @@ export class WebhookServer {
             })
         });
 
-        console.log("ROUTES REMOVED!");
-        this._app.router.stack.forEach(route => console.log("KNOWN ROUTE", route, route.route?.path, (route.route as any).methods.post));
     }
 
     public config():WebhookServerConfig {
@@ -161,7 +158,6 @@ export class WebhookServerService extends BaseService {
             // compare the properties.
             if(!webhookServerNode){
                 // the node has been removed: TODO: alert the listeners that it has been removed.
-                console.log("Webhook Service Removed", serverServiceConfig)
                 removedServers.push(serverServiceConfig);
             }
             else{
@@ -173,7 +169,6 @@ export class WebhookServerService extends BaseService {
                 
                 if(serviceChanged){
                     // TODO: notify the subscribers that the server has chaned.
-                    console.log("Notify the subscribers WebhookServer has changed.", serverServiceConfig, webhookServerNode);
                     removedServers.push(serverServiceConfig);
                     addedServers.push(webhookServerNode);
                 }
