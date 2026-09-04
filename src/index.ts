@@ -23,6 +23,7 @@ export * from "./core/metrics/template/TimerMetricTemplate";
 // TAGGING
 export * from "./core/tagging/service/NodeTypeService";
 export * from "./core/tagging/NodeDescriptionDecorator";
+export * from "./core/tagging/ServiceDescriptionDecorator";
 
 // UI
 export * from "./core/ui/template/UIHelperTemplate";

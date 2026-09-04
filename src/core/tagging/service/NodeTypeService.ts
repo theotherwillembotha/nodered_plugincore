@@ -1,8 +1,13 @@
 import { INodeClass } from "../../NodeGenerator";
-import { BaseService, ConfigNode, FlowDeployment, ServiceDescriptor } from "../../NodeConstructor";
+import { BaseService, ConfigNode, FlowDeployment } from "../../NodeConstructor";
+import { ServiceDescription } from "../ServiceDescriptionDecorator";
 import { NodeAPI, NodeAPISettingsWithData } from "node-red";
 
 
+@ServiceDescription({
+    id: "@theotherwillembotha/nodetypeservice",
+    sourceFile: "@theotherwillembotha/node-red-plugincore"
+})
 export class NodeTypeService extends BaseService {
     private red!: NodeAPI<NodeAPISettingsWithData>;
     private nodeTypes:{[key:string]:INodeClass[]} = {};
@@ -54,14 +59,4 @@ export class NodeTypeService extends BaseService {
         return this.nodeTypes[tag] ? this.nodeTypes[tag] : [];
     }
 
-    static override getServiceDescriptor():ServiceDescriptor {
-        return new ServiceDescriptor(
-            "@theotherwillembotha/nodetypeservice",
-            "NodeTypeService",
-            "services-plugin",
-            "@theotherwillembotha/node-red-plugincore",
-            NodeTypeService,
-            []
-        );
-    }
 }

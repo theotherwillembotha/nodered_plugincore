@@ -1,6 +1,11 @@
-import {BaseNode, BaseNodeConfig, BaseService, NodeManager, ServiceDescriptor} from "../../NodeConstructor"
+import {BaseNode, BaseNodeConfig, BaseService, NodeManager} from "../../NodeConstructor"
+import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
 import { Node, NodeAPI, NodeDef, NodeAPISettingsWithData} from "node-red";
 
+@ServiceDescription({
+    id: "@theotherwillembotha/settingsservice",
+    sourceFile: "@theotherwillembotha/node-red-plugincore"
+})
 export class SettingsService extends BaseService {
 
     static create(node:BaseNode<BaseNodeConfig>, config:SettingsConfig): Settings{
@@ -40,15 +45,6 @@ export class SettingsService extends BaseService {
         });
     }
 
-    static override getServiceDescriptor():ServiceDescriptor {
-        return new ServiceDescriptor(
-            "@theotherwillembotha/settingsservice",
-            "SettingsService",
-            "services-plugin",
-            "@theotherwillembotha/node-red-plugincore",
-            SettingsService
-        );
-    }
 }
 
 export class Settings{

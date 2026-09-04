@@ -6,8 +6,8 @@ import { SourceUtility } from "../../NodeGenerator";
 import { WebhookTemplate, WebhookTemplateConfig } from "../../webhook/template/WebhookTemplate";
 import { Webhook } from "../../webhook/WebhookDecorator";
 import { EndpointMethodType } from "../../webhook/service/WebhookServerService";
-import  {register as PrometheusRegistry, } from "prom-client";
-import express, { Request, Response, Express } from 'express';
+import type { Request, Response } from 'express';
+function getPrometheusRegistry(): any { return require('prom-client').register; }
 import { NodeDescription } from "../../tagging/NodeDescriptionDecorator";
 
 /*
@@ -49,7 +49,7 @@ export class MetricsConfigNode extends ConfigNode<MetricsConfigNodeConfig> {
 
     @Webhook({name:"MetricsConfigNode", methods:[EndpointMethodType.GET]})
     private onWebhookRequest(request:Request, response:Response):void {
-        response.set('Content-Type', PrometheusRegistry.contentType);
+        response.set('Content-Type', getPrometheusRegistry().contentType);
         this._metrics.registry().metrics().then((data:any) => response.status(200).send(data))
     }
 }

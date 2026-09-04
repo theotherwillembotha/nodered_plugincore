@@ -1,6 +1,7 @@
 import * as fs from 'fs';
+import * as path from 'path';
 
-import { buildNode, Template, NodeDescriptor, BaseService, ServiceDescriptor, BaseNode, DependencyType, TemplateDescriptor } from "./NodeConstructor"
+import { buildNode, buildNodeBuilder, Template, NodeDescriptor, BaseService, ServiceDescriptor, BaseNode, DependencyType, TemplateDescriptor } from "./NodeConstructor"
 
 const templatePropertyKeys = ["onIncludeOnce", "onIncludeDefaults", "onIncludeEditPrepare", "onIncludeEditPrepare", "onIncludeEditSave", "onIncludeEditForm"];
 
@@ -105,31 +106,17 @@ class NodeGenerator {
     }
 
     public generate(nodesOutputFile:string, pluginsOutputFile:string){
-        // STEP 1. Compile the templates.
-        // let templateInclude =  this._templates
-        //     .map(template => new (template.clazz()))
-        //     .map(template => {
-        //         return template.onIncludeOnce();
-        //     })
-        //     .join("\n");
-        let templateInclude = ""
-        
-        // STEP 2. compose the HTMLStructure of each of the nodes.
-        let nodeHTMLOutut = Object.values(this._nodes)
-            .map(node => {
-                console.log(`Processing node: ${node.descriptor.id()}`);
-
-                return buildNode(node.nodeClass);
-            })
-            .join("\n")
-
-        fs.writeFileSync(nodesOutputFile + ".html",`
+        // STEP 1. Write an empty Nodes.html.
+        // Client-side node type definitions live in Plugins.html (generated below)
+        // to prevent HTML-scanning conflicts when multiple plugins bundle the same
+        // plugincore infrastructure nodes.
+        fs.writeFileSync(nodesOutputFile + ".html", `
 <!--
 ${NodeGenerator.warning}
+Client-side node type definitions have been moved to Plugins.html to prevent
+duplicate type registration conflicts when multiple plugins share the same
+plugincore infrastructure nodes.
 -->
-${templateInclude}
-${nodeHTMLOutut}
-
         `);
 
         // Step 3. compose the JS structure for each of the nodes.
@@ -153,14 +140,36 @@ ${nodeHTMLOutut}
 ${NodeGenerator.warning}
 */
 "use strict";
-const NodeManager = require("@theotherwillembotha/node-red-plugincore").NodeManager;
+const { NodeManager } = require("./runtime/NodeManagerRuntime");
 ${importList}
 module.exports = (RED) => {
 let manager = new NodeManager(RED);
 ${moduleExports}
-}        
-        
+}
+
         `);
+
+        // Copy NodeManagerRuntime.js into the plugin's build/runtime/ folder so that
+        // the generated Nodes.js require("./runtime/NodeManagerRuntime") resolves locally
+        // with no dependency on plugincore being installed in the user's environment.
+        const outputDir = path.dirname(nodesOutputFile);
+        const runtimeDestDir = path.join(outputDir, 'runtime');
+        const runtimeDestPath = path.join(runtimeDestDir, 'NodeManagerRuntime.js');
+
+        let runtimeSrcPath: string;
+        try {
+            // Resolves when this is a consumer plugin — plugincore is in node_modules.
+            runtimeSrcPath = require.resolve('@theotherwillembotha/node-red-plugincore/build/runtime/NodeManagerRuntime');
+        } catch {
+            // We ARE plugincore — NodeManagerRuntime.js is compiled alongside us in build/core/.
+            runtimeSrcPath = path.join(__dirname, 'NodeManagerRuntime.js');
+        }
+
+        if (path.resolve(runtimeSrcPath) !== path.resolve(runtimeDestPath)) {
+            fs.mkdirSync(runtimeDestDir, { recursive: true });
+            fs.copyFileSync(runtimeSrcPath, runtimeDestPath);
+        }
+        console.log(`NodeManagerRuntime.js → ${runtimeDestPath}`);
 
         console.log(`Done building ${Object.keys(this._nodes).length} nodes\n${Object.values(this._nodes).map(node => " - " + node.descriptor.id() + "\n").join("")}\n`);
 
@@ -196,29 +205,38 @@ module.exports = function (RED) {
 
             if(addedPlugin && plugin.instantiate && !plugin.instance){
                 plugin.instance = new plugin.class();
-                
+
                 // instantiate the plugin.
                 await plugin.instance.init(RED);
 
+                // Eagerly call onDeploy with any pre-existing saved flows so that
+                // service registries (MetricsService, WebhookServerService, etc.) are
+                // populated before config nodes are constructed during flow startup.
+                // Without this, MetricsConfigNode._metrics is undefined on first boot.
+                const existingFlows = await runtime.flows.getFlows({});
+                const hasExistingFlows = existingFlows && existingFlows.flows && existingFlows.flows.length > 0;
+                if (hasExistingFlows) {
+                    await plugin.instance.onDeploy(existingFlows);
+                }
+
                 // publish an event that it has ben deployed.
                 RED.events.emit("plugin.instantiated", pluginID);
-                                
+
                 pluginList.splice(pluginList.findIndex(current => current.id() === addedPlugin.id()), 1);
 
                 // register a flow deployment listener.
-                let startupDeployment = true;
+                // startupDeployment is only needed for a truly fresh Node-RED with no saved flows.
+                let startupDeployment = !hasExistingFlows;
                 RED.events.on('runtime-event', async (event) => {
-                    // startup deployment.
+                    // startup deployment (fresh Node-RED with no pre-existing flows).
                     if ("runtime-deploy" === event?.id && startupDeployment) {
-                        //console.log("STARTUP DEPLOYMENT");
                         startupDeployment = false;
                         const flows = await runtime.flows.getFlows({});
                         await plugin.instance.onDeploy(flows);
                     }
-                    
+
                     // stopping flows on redeployment.
                     if ("runtime-state" === event?.id && event?.payload?.state === "stop" && event?.payload?.deploy) {
-                        //console.log("REDEPLOY!");
                         const flows = await runtime.flows.getFlows({});
                         await plugin.instance.onDeploy(flows);
                     }
@@ -239,6 +257,43 @@ module.exports = function (RED) {
 `
         fs.writeFileSync(pluginsOutputFile + ".js", output);
         console.log(`Done building ${this._services.length} services\n${this._services.map(service => " - " + service.name() + "\n").join("")}\n`);
+
+        // STEP 4. Generate Plugins.html with deferred client-side node definitions.
+        // All nodes are registered via registry:node-set-added so that:
+        //   a) registerType is only called after typeToId/nodeSets are populated, and
+        //   b) data-template-name declarations are absent from Nodes.html, avoiding
+        //      the HTML-scanning conflict that causes Node-RED to reject an entire
+        //      plugin when a second package declares the same node type.
+        const seenOnce = new Set<string>();
+        const onceHtmlParts: string[] = [];
+        const nodePluginParts: string[] = [];
+
+        Object.values(this._nodes).forEach(node => {
+            console.log(`Building Plugins.html for: ${node.descriptor.id()}`);
+            const nb = buildNodeBuilder(node.nodeClass);
+
+            nb.buildOnceHtml().forEach(({source, html}) => {
+                if (!seenOnce.has(source)) {
+                    seenOnce.add(source);
+                    onceHtmlParts.push(html);
+                }
+            });
+
+            nodePluginParts.push([
+                nb.buildDeferredType(),
+                nb.buildHtml(),
+                nb.buildDocumentation()
+            ].join('\n\n'));
+        });
+
+        fs.writeFileSync(pluginsOutputFile + ".html", `
+<!--
+${NodeGenerator.warning}
+-->
+${onceHtmlParts.join('\n')}
+${nodePluginParts.join('\n\n')}
+        `);
+        console.log(`Done building Plugins.html\n`);
     }
 
     private static generateHeader(node:NodeDescriptor){

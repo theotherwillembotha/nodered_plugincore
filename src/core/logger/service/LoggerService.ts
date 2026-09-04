@@ -1,15 +1,23 @@
 
-import {BaseService, ServiceDescriptor, ConfigNodeConfig, ConfigNode } from "../../NodeConstructor";
+import {BaseService, ConfigNodeConfig, ConfigNode } from "../../NodeConstructor";
+import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
 import { NodeAPI, NodeAPISettingsWithData, Node } from "node-red";
-import Handlebars from "handlebars";
 import { LoggerTemplate, LoggerTemplateConfig } from "../template/LoggerTemplate";
-var network = require('network');
 
-// helper for serializing json objects inside handlebars tags.
-// you can then convert it like this: {{{json myobject}}}
-Handlebars.registerHelper('json', function(context) {
-    return JSON.stringify(context);
-});
+// Build-time / optional runtime deps — lazy so they are never required at bundle load time.
+function getHandlebars(): any { return require('handlebars'); }
+function getNetwork(): any { return require('network'); }
+
+let _helpersRegistered = false;
+function ensureHelpersRegistered(): void {
+    if (_helpersRegistered) return;
+    _helpersRegistered = true;
+    // helper for serializing json objects inside handlebars tags.
+    // you can then convert it like this: {{{json myobject}}}
+    getHandlebars().registerHelper('json', function(context: any) {
+        return JSON.stringify(context);
+    });
+}
 
 export enum Level{
     DEBUG = "DEBUG",
@@ -40,12 +48,13 @@ export type TagMap = {
 
 export abstract class Log  {
     private _config: LoggerTemplateConfig;
-    private template: HandlebarsTemplateDelegate<any>;
+    private _templateStr: string;
+    private _compiledTemplate: any = null;
     private tags:TagMap;
 
     protected constructor(config:LoggerTemplateConfig){
         this._config = config;
-        this.template = Handlebars.compile(config.template);
+        this._templateStr = config.template;
         this.tags = {
             id: config.id,
             node: config.name,
@@ -55,6 +64,14 @@ export abstract class Log  {
         }
     }
 
+    private getTemplate(): any {
+        if (!this._compiledTemplate) {
+            ensureHelpersRegistered();
+            this._compiledTemplate = getHandlebars().compile(this._templateStr);
+        }
+        return this._compiledTemplate;
+    }
+
     protected config():LoggerTemplateConfig{
         return this._config;
     }
@@ -62,7 +79,7 @@ export abstract class Log  {
     public log(payload:{[key:string]:any}|string):void{
         try{
             // step 1. serialize the payload using the template engine.
-            let message = (payload instanceof String) ? payload as string : this.template({msg:payload});
+            let message = (payload instanceof String) ? payload as string : this.getTemplate()({msg:payload});
 
             // step 2. write to the log appender.
             this.writeToLog(this.config().level, message, this.tags);
@@ -71,7 +88,7 @@ export abstract class Log  {
             console.log(e);
         }
     }
-    
+
     protected abstract writeToLog(level:string, message:string, tags:{[key:string]:string|boolean|number}):void;
 }
 
@@ -110,6 +127,11 @@ export abstract class AbstractLogger<BaseLoggerConfig>{
     protected abstract createLogger(config: LoggerTemplateConfig):Log;
 }
 
+@ServiceDescription({
+    id: "@theotherwillembotha/loggerservice",
+    sourceFile: "@theotherwillembotha/node-red-plugincore",
+    dependencies: [LoggerTemplate]
+})
 export class LoggerService extends BaseService {
 
     public static instanceID:string;
@@ -123,7 +145,7 @@ export class LoggerService extends BaseService {
         this.red = red;
 
         return new Promise<void>((resolve) => {
-            network.get_active_interface((err:any, obj:any) => {
+            getNetwork().get_active_interface((_err:any, obj:any) => {
                 LoggerService.instanceID = obj.ip_address;
             });
         });
@@ -131,16 +153,6 @@ export class LoggerService extends BaseService {
 
     public deinit(red: NodeAPI<NodeAPISettingsWithData>): void | Promise<void> {}
 
-    static override getServiceDescriptor():ServiceDescriptor {
-        return new ServiceDescriptor(
-            "@theotherwillembotha/loggerservice",
-            "LoggerService",
-            "services-plugin",
-            "@theotherwillembotha/node-red-plugincore",
-            LoggerService,
-            [LoggerTemplate]
-        );
-    }
 }
 
 export type LoggerConfigNodeConfig = ConfigNodeConfig & BaseLoggerConfig & {}
@@ -160,10 +172,11 @@ export abstract class LoggerConfigNode<CNC extends LoggerConfigNodeConfig, Logge
 
 export class DoNothingAppender extends Log{
 
-    private static instance:DoNothingAppender = new DoNothingAppender();
+    private static _instance: DoNothingAppender | null = null;
 
-    static get(): any {
-      return DoNothingAppender.instance;
+    static get(): DoNothingAppender {
+        if (!DoNothingAppender._instance) DoNothingAppender._instance = new DoNothingAppender();
+        return DoNothingAppender._instance;
     }
 
     private constructor(){

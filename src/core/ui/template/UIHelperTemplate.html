@@ -56,9 +56,9 @@
     border-color: rgba(255, 255, 255, 0.3) !important;
 }
 
-/* Scrollable body that contains the jQuery UI tab widget */
+/* Scrollable body that contains the jQuery UI tab widget or plain content */
 .plugincore-dialog-body {
-    flex: 1;
+    flex: 1 1 auto;
     overflow: auto;
     padding: 10px;
 }
@@ -149,14 +149,44 @@
     };
 
     /**
+     * PluginCore.tabs(tabs) → jQuery element
+     *
+     * tabs: [{ label: string, render($container) }]
+     *
+     * Builds and returns a jQuery UI tab widget element.
+     * Can be embedded in any container, including inside PluginCore.dialog render().
+     */
+    PluginCore.tabs = function(tabs) {
+        var uid     = 'plugincore-tabs-' + Date.now();
+        var $tabsEl = $('<div>').attr('id', uid);
+        var $ul     = $('<ul>');
+
+        (tabs || []).forEach(function(tab, i) {
+            var paneId = uid + '-pane-' + i;
+            $ul.append(
+                $('<li>').append($('<a>').attr('href', '#' + paneId).text(tab.label))
+            );
+            var $pane = $('<div>').attr('id', paneId);
+            if (tab.render) { tab.render($pane); }
+            $tabsEl.append($pane);
+        });
+
+        $tabsEl.prepend($ul);
+        $tabsEl.tabs();
+
+        return $tabsEl;
+    };
+
+    /**
      * PluginCore.dialog(options) → { close() }
      *
      * options: {
-     *   title : string,
-     *   tabs  : [{ label: string, render($container) }]
+     *   title  : string,
+     *   render : function($container)              — simple dialog; body passed directly
+     *   tabs   : [{ label: string, render($c) }]  — tabbed dialog; delegates to PluginCore.tabs
      * }
      *
-     * Uses jQuery UI tabs for the tab widget (already bundled with Node-RED).
+     * render and tabs can coexist: render is called first, then the tab widget is appended.
      * Closes on: close button click, overlay click, or Escape key.
      */
     PluginCore.dialog = function(options) {
@@ -179,31 +209,16 @@
         );
         $titlebar.append($closeBtn);
 
-        // ── Body + jQuery UI tabs ──────────────────────────────────────────
-        var $body   = $('<div class="plugincore-dialog-body">');
-        var $tabsEl = $('<div>').attr('id', uid + '-tabs');
-        var $ul     = $('<ul>');
+        // ── Body ──────────────────────────────────────────────────────────
+        var $body = $('<div class="plugincore-dialog-body">');
 
-        (options.tabs || []).forEach(function(tab, i) {
-            var paneId = uid + '-pane-' + i;
-            $ul.append(
-                $('<li>').append($('<a>').attr('href', '#' + paneId).text(tab.label))
-            );
-            var $pane = $('<div>').attr('id', paneId);
-            if (tab.render) { tab.render($pane); }
-            $tabsEl.append($pane);
-        });
-
-        $tabsEl.prepend($ul);
-        $body.append($tabsEl);
+        if (options.render) { options.render($body); }
+        if (options.tabs)   { $body.append(PluginCore.tabs(options.tabs)); }
 
         // ── Assemble ───────────────────────────────────────────────────────
         $dialog.append($titlebar).append($body);
         $overlay.append($dialog);
         $('body').append($overlay);
-
-        // Initialise jQuery UI tabs (bundled with Node-RED)
-        $tabsEl.tabs();
 
         // ── Close logic ───────────────────────────────────────────────────
         var escNs = 'keydown.plugincore-dialog-' + uid;

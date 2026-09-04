@@ -1,6 +1,6 @@
 {
   "name": "@theotherwillembotha/node-red-plugincore",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A core framework for building production-grade Node-RED plugins, with built-in support for structured logging, metrics, and webhook ingestion.",
   "author": "Willem Botha (@theotherwillembotha)",
   "license": "ISC",
@@ -51,7 +51,7 @@
     "@types/js-beautify": "^1.14.3",
     "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^22.15.29",
+    "@types/node": "^26.1.1",
     "@types/node-red": "~1.3.5",
     "@types/whatwg-url": "^13.0.0"
   },

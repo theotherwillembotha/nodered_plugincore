@@ -1,7 +1,9 @@
-import {BaseNode, BaseNodeConfig, BaseService, FlowDeployment, ServiceDescriptor} from "../../NodeConstructor"
-import client, {Counter, Gauge, Histogram, HistogramConfiguration, MetricObjectWithValues, MetricValueWithName, register as PrometheusRegistry, Registry, Summary, SummaryConfiguration } from "prom-client";
+import {BaseNode, BaseNodeConfig, BaseService, FlowDeployment} from "../../NodeConstructor"
+import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
+import type { Counter, Gauge, Histogram, HistogramConfiguration, Registry, Summary, SummaryConfiguration } from "prom-client";
 import { NodeAPI, NodeAPISettingsWithData } from "node-red";
-import deepEqual from "deep-equal";
+function getPromClient(): any { return require('prom-client'); }
+function getDeepEqual(): any { return require('deep-equal'); }
 
 
 export abstract class Metric<ConfigType extends MetricConfig> {
@@ -47,12 +49,12 @@ export interface CounterMetricConfig extends MetricConfig {
 
 export class CounterMetric extends Metric<CounterMetricConfig>{
   private counter: Counter;
-  private internalCounter: Counter.Internal;
+  private internalCounter: any;
   private subscribers:{[key:string]:CounterCallback} = {};
-  constructor(id:string, config:CounterMetricConfig, registry:client.Registry){
+  constructor(id:string, config:CounterMetricConfig, registry: Registry){
     super(config);
 
-    this.counter = new Counter({
+    this.counter = new (getPromClient().Counter)({
       name: id,
       help: (config.metricdescription) ? config.metricdescription: config.metricname,
       labelNames: Object.keys(this.labels()),
@@ -102,14 +104,14 @@ export interface GaugeMetricConfig  extends MetricConfig {
 
 export class GaugeMetric extends Metric<GaugeMetricConfig>{
   private collector: number = 0;
-  private gauge:Gauge.Internal<string>;
+  private gauge: any;
   private subscribers:{[key:string]:GaugeCallback} = {};
 
-  constructor(id:string, config:GaugeMetricConfig, registry:client.Registry){
+  constructor(id:string, config:GaugeMetricConfig, registry: Registry){
     super(config);
     let _this = this;
 
-    this.gauge = new client.Gauge({
+    this.gauge = new (getPromClient().Gauge)({
       name: id,
       help: (config.metricdescription) ? config.metricdescription: config.metricname,
       registers: [registry],
@@ -194,10 +196,10 @@ export enum BucketType{
 }
 
 export class HistogramMetric extends Metric<HistogramMetricConfig> {
-  
-  private histogram: client.Histogram<string>;
+
+  private histogram: Histogram;
   private subscribers:{[key:string]:HistogramCallback} = {};
-  
+
   constructor(id:string, config:HistogramMetricConfig, registry:Registry){
     super(config);
 
@@ -219,14 +221,14 @@ export class HistogramMetric extends Metric<HistogramMetricConfig> {
     }
     if(config.buckettype === BucketType.linear){
       let bucketConfig = (config.bucketconfig as LinearBucketConfig);
-      histogramConfig.buckets = client.linearBuckets(bucketConfig.start, bucketConfig.interval, bucketConfig.count);
+      histogramConfig.buckets = getPromClient().linearBuckets(bucketConfig.start, bucketConfig.interval, bucketConfig.count);
     }
     if(config.buckettype === BucketType.exponential){
       let bucketConfig = (config.bucketconfig as ExponentialBucketConfig);
-      histogramConfig.buckets = client.exponentialBuckets(bucketConfig.start, bucketConfig.factor, bucketConfig.count);
+      histogramConfig.buckets = getPromClient().exponentialBuckets(bucketConfig.start, bucketConfig.factor, bucketConfig.count);
     }
 
-    this.histogram = new Histogram(histogramConfig);
+    this.histogram = new (getPromClient().Histogram)(histogramConfig);
     this.histogram.zero(this.labels() as any);
   }
 
@@ -308,7 +310,7 @@ export enum PercentileType {
 }
 
 export class SummaryMetric extends Metric<SummaryMetricConfig> {
-  private summary: client.Summary;
+  private summary: Summary;
   private subscribers:{[key:string]:SummaryCallback} = {};
   
   constructor(id:string, config:SummaryMetricConfig, registry:Registry){
@@ -332,7 +334,7 @@ export class SummaryMetric extends Metric<SummaryMetricConfig> {
       summaryConfig.percentiles = percentilesConfig.percentiles;
     }
 
-    this.summary = new Summary(summaryConfig);
+    this.summary = new (getPromClient().Summary)(summaryConfig);
     //this.summary.zero(this._labels as any);
   }
 
@@ -367,7 +369,7 @@ interface Labels {
 
 export class MetricsContainer {
   private _config: MetricsConfig;
-  private _registry: client.Registry;
+  private _registry: Registry;
 
   private counters:{[key:string]:CounterMetric} = {};
   private histograms:{[key:string]:HistogramMetric}  = {};
@@ -378,7 +380,7 @@ export class MetricsContainer {
     this._config = config;
 
     // create a registry with the config.
-    this._registry = new client.Registry();
+    this._registry = new (getPromClient().Registry)();
 
   }
 
@@ -386,7 +388,7 @@ export class MetricsContainer {
     this._registry.clear();
   }
 
-  public registry():client.Registry{
+  public registry(): Registry {
     return this._registry;
   }
 
@@ -403,7 +405,7 @@ export class MetricsContainer {
     let counter:CounterMetric = this.counters[counterId];
     if(counter){
       // check if the config has changed much.
-      if(!deepEqual(counter.config(), config)){
+      if(!getDeepEqual()(counter.config(), config)){
         this._registry.removeSingleMetric(counterId);
         this.counters[counterId] = (counter = new CounterMetric(counterId, config, this._registry));
       }
@@ -420,7 +422,7 @@ export class MetricsContainer {
     var gauge:GaugeMetric = this.gauges[gaugeId];
     if(gauge){
       // check if the config has changed much.
-      if(!deepEqual(gauge.config(), config)){
+      if(!getDeepEqual()(gauge.config(), config)){
         this._registry.removeSingleMetric(gaugeId);
         this.gauges[gaugeId] = (gauge = new GaugeMetric(gaugeId, config, this._registry));
       }
@@ -436,7 +438,7 @@ export class MetricsContainer {
     let histogram:HistogramMetric = this.histograms[histogramId];
     if(histogram){
       // check if the config has changed much.
-      if(!deepEqual(histogram.config(), config)){
+      if(!getDeepEqual()(histogram.config(), config)){
         this._registry.removeSingleMetric(histogramId);
         this.histograms[histogramId] = (histogram = new HistogramMetric(histogramId, config, this._registry));
       }
@@ -452,7 +454,7 @@ export class MetricsContainer {
     const summaryId = `summary_${config.node.id}`;
     let summary:SummaryMetric = this.summaries[summaryId];
     if(summary){
-      if(!deepEqual(summary.config(), config)){
+      if(!getDeepEqual()(summary.config(), config)){
         this._registry.removeSingleMetric(summaryId);
         this.summaries[summaryId] = (summary = new SummaryMetric(summaryId, config, this._registry));
       }
@@ -466,9 +468,19 @@ export class MetricsContainer {
 }
 
 
+// Stored on global so all bundled copies of MetricsService share the same registry.
+const _GLOBAL_METRICS_KEY = '__plugincore_metrics__';
+function getMetricsStore(): {[key:string]:MetricsContainer} {
+  if (!(global as any)[_GLOBAL_METRICS_KEY]) (global as any)[_GLOBAL_METRICS_KEY] = {};
+  return (global as any)[_GLOBAL_METRICS_KEY];
+}
+
+@ServiceDescription({
+    id: "@theotherwillembotha/metricsservice",
+    sourceFile: "@theotherwillembotha/node-red-plugincore"
+})
 export class MetricsService extends BaseService {
 
-  private static metrics:{[key:string]:MetricsContainer} = {};
   private red!: NodeAPI<NodeAPISettingsWithData>;
   
   public constructor(){
@@ -489,37 +501,30 @@ export class MetricsService extends BaseService {
       .filter(element => element.type === "MetricsConfigNode")
       .forEach(element => configNodes[element.id] = element as any as MetricsConfig);
 
+    const store = getMetricsStore();
+
     // retire metrics that have been removed or that have changed.
-    Object.entries(MetricsService.metrics)
+    Object.entries(store)
       .filter(([id, metric]) => !configNodes[id] || metric.hasChanged(configNodes[id]))
       .forEach(([id, metric]) => {
-        delete MetricsService.metrics[id];
+        delete store[id];
         metric.close();
       });
 
     // create the new metrics.
     Object.entries(configNodes)
-      .filter(([id, metricConfig]) => !MetricsService.metrics[id])
+      .filter(([id, metricConfig]) => !store[id])
       .forEach(([id, metricConfig]) => {
-        MetricsService.metrics[id] = new MetricsContainer(metricConfig);
+        store[id] = new MetricsContainer(metricConfig);
       })
 
     return Promise.resolve();
   }
 
   public static get(reference:MetricsReference):MetricsContainer{
-    return MetricsService.metrics[reference.metricsReference];
+    return getMetricsStore()[reference.metricsReference];
   }
 
-  static override getServiceDescriptor():ServiceDescriptor {
-    return new ServiceDescriptor(
-      "@theotherwillembotha/metricsservice",
-      "MetricsService",
-      "services-plugin",
-      "@theotherwillembotha/node-red-plugincore",
-      MetricsService
-    );
-  }
 }
 
 export interface MetricsConfig {

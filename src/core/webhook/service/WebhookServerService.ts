@@ -1,13 +1,15 @@
 
-import {BaseService, FlowDeployment, ServiceDescriptor } from "../../NodeConstructor";
+import {BaseService, FlowDeployment} from "../../NodeConstructor";
+import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
 import { NodeAPI, NodeAPISettingsWithData } from "node-red";
 import { WebhookServerConfigNode } from "../node/WebhookServerConfigNode";
 import { WebhookTemplate } from "../template/WebhookTemplate";
-import express, {Express, Request, Response} from "express";
+import type { Express, Request, Response } from "express";
 import { Server } from "http";
 import { ApiKeyMechanismType, RestAuthType } from "../../logger/service/LoggerService";
 
-var bodyParser = require('body-parser');
+function getExpress(): any { return require('express'); }
+function getBodyParser(): any { return require('body-parser'); }
 
 export enum EndpointMethodType {
     GET = "GET",
@@ -46,8 +48,8 @@ export class WebhookServer {
     public constructor(config:WebhookServerConfig){
         this._config = config;
 
-        this._app = express();
-        this._app.use(bodyParser.json({type: "application/json", limit: '50mb'}));
+        this._app = getExpress()();
+        this._app.use(getBodyParser().json({type: "application/json", limit: '50mb'}));
         this._listener = this._app.listen(this._config.port, '0.0.0.0');
     }
 
@@ -117,6 +119,10 @@ export class WebhookServer {
 
     }
 
+    public close(): void {
+        this._listener.close();
+    }
+
     public config():WebhookServerConfig {
         return this._config;
     }
@@ -129,9 +135,19 @@ export type  WebhookServerConfig = {
     externalPort:number;
 }
 
-export class WebhookServerService extends BaseService {
+// Stored on global so all bundled copies share the same server registry.
+const _GLOBAL_WEBHOOKSERVERS_KEY = '__plugincore_webhookservers__';
+function getWebhookServersStore(): {[key:string]:WebhookServer} {
+    if (!(global as any)[_GLOBAL_WEBHOOKSERVERS_KEY]) (global as any)[_GLOBAL_WEBHOOKSERVERS_KEY] = {};
+    return (global as any)[_GLOBAL_WEBHOOKSERVERS_KEY];
+}
 
-    private static webhookServers:{[key:string]:WebhookServer} = {};
+@ServiceDescription({
+    id: "@theotherwillembotha/webhookserverservice",
+    sourceFile: "@theotherwillembotha/node-red-plugincore",
+    dependencies: [WebhookServerConfigNode, WebhookTemplate]
+})
+export class WebhookServerService extends BaseService {
 
     constructor(){
         super("wehbookserver")
@@ -151,8 +167,10 @@ export class WebhookServerService extends BaseService {
 
         let webhookServerNodes = flowDeployment.flows.filter(node => node.type === "WebhookServerConfigNode") as any as WebhookServerConfig[];
 
+        const store = getWebhookServersStore();
+
         // find all the nodes that have been removed or changed.
-        Object.entries(WebhookServerService.webhookServers).forEach(([key, serverService]) => {
+        Object.entries(store).forEach(([key, serverService]) => {
             let webhookServerNode = webhookServerNodes.find(node => node.id === key);
             let serverServiceConfig = serverService.config();
             // compare the properties.
@@ -177,30 +195,28 @@ export class WebhookServerService extends BaseService {
 
         // find all the servers that have been added.
         webhookServerNodes
-            .filter(node => !WebhookServerService.webhookServers[node.id])
+            .filter(node => !store[node.id])
             .forEach(node => addedServers.push(node));
 
-        //console.log("REMOVED SERVERS:", removedServers);
-        //console.log("ADDED SERVERS:", addedServers);        
+        // Close and remove servers that have been deleted or whose config changed.
+        removedServers.forEach(removedConfig => {
+            const server = store[removedConfig.id];
+            if (server) {
+                server.close();
+                delete store[removedConfig.id];
+                console.log(`Closed webhook server on port ${removedConfig.port}`);
+            }
+        });
     }
 
     public static get (config:WebhookServerConfig): WebhookServer{
-        let server = (this.webhookServers[config.id]);
+        const store = getWebhookServersStore();
+        let server = store[config.id];
         if(!server){
-            this.webhookServers[config.id] = server = new WebhookServer(config);
+            store[config.id] = server = new WebhookServer(config);
             console.log(`Creating webhook server on port ${config.port}`);
         }
         return server;
     }
 
-    static override getServiceDescriptor():ServiceDescriptor {
-        return new ServiceDescriptor(
-            "@theotherwillembotha/webhookserverservice",
-            "WebhookServerService",
-            "services-plugin",
-            "@theotherwillembotha/node-red-plugincore",
-            WebhookServerService,
-            [WebhookServerConfigNode, WebhookTemplate]
-        );
-    }
 }

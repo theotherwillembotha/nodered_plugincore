@@ -1,22 +1,25 @@
-import { PluginDefinition } from "@node-red/registry";
-import { Node, NodeAPI, NodeDef, NodeAPISettingsWithData} from "node-red";
+import { Node, NodeAPI, NodeAPISettingsWithData} from "node-red";
 import { INamedType, INodeClass, ITemplateClass } from "./NodeGenerator";
 
 import "reflect-metadata";
-import jsdom from "jsdom";
 import fs from 'fs';
-import beautify from 'js-beautify';
-import markdownit from 'markdown-it'
-import Handlebars, { template } from "handlebars";
-import { NodeTypeService } from "./tagging/service/NodeTypeService";
 
+import {
+    NODEMANAGER_API_VERSION,
+    POST_CONSTRUCT_KEY,
+    BaseNodeConfig,
+    runPostConstructInitializers,
+    NodeManager
+} from "./NodeManagerRuntime";
 
-
-export interface BaseNodeConfig {
-    id:string;
-    name:string;
-    type:string;
-}
+// Re-export so existing downstream code keeps working unchanged.
+export {
+    NODEMANAGER_API_VERSION,
+    POST_CONSTRUCT_KEY,
+    BaseNodeConfig,
+    runPostConstructInitializers,
+    NodeManager
+};
 
 export abstract class BaseNode<Config extends BaseNodeConfig> {
 
@@ -198,8 +201,6 @@ export abstract class Template{
 
 type VoidMethod = (...args: any[]) => void | Promise<void>;
 
-const POST_CONSTRUCT_KEY = Symbol('postConstructInitializers');
-
 // Builder class for post-construct decorators
 class PostConstructDecoratorBuilder<TMetadata = any> {
     private decoratorName: string;
@@ -341,143 +342,6 @@ export function createPostConstructDecorator<TMetadata = any>(decoratorName: str
     return new PostConstructDecoratorBuilder<TMetadata>(decoratorName);
 }
 
-// Single function to run all post-construct initializers
-let runPostConstructInitializers = function(instance: any) {
-    const initializers = instance[POST_CONSTRUCT_KEY];
-    if (initializers && initializers.length > 0) {
-        const className = instance.constructor.name;
-        //console.log(`Running ${initializers.length} post-construct initializers for ${className}`);
-        
-        initializers.forEach((init: Function, index: number) => {
-            try {
-                init(instance);
-            } catch (error) {
-                console.error(
-                    `Post-construct initialization failed:\n` +
-                    `  Class: ${className}\n` +
-                    `  Initializer: ${index + 1}/${initializers.length}\n` +
-                    `  Error: ${error instanceof Error ? error.message : String(error)}`
-                );
-                throw error;
-            }
-        });
-        
-        // Clear the initializers after running
-        delete instance[POST_CONSTRUCT_KEY];
-    }
-}
-
-// ************************************************
-
-export class NodeManager{
-    private static PLUGINID = "node-red-contrib-theotherwillembotha/services-plugin";
-    private static _RED: NodeAPI<NodeAPISettingsWithData>;
-    
-    private nodeTypeService:NodeTypeService;
-    private typeBacklog:INodeClass[] = []
-
-    public constructor(RED : NodeAPI<NodeAPISettingsWithData>){
-        NodeManager._RED = RED;
-
-        let nodeTypeServiceListener = async (pluginID:String) => {
-            if(pluginID === "@theotherwillembotha/nodetypeservice"){
-                // disable the listener- the plugin has been installed.
-                RED.events.off('plugin.instantiated', nodeTypeServiceListener)
-
-                // get a handle on the NodeTypeService
-                let plugin  = RED.plugins.get("@theotherwillembotha/nodetypeservice") as any;
-                this.nodeTypeService = (RED.plugins.get("@theotherwillembotha/nodetypeservice") as any).instance as NodeTypeService;
-                
-                // process the backlog.
-                for(let nodeType of this.typeBacklog){
-                    for(let tag of nodeType.getNodeDescriptor().tags()){
-                        this.nodeTypeService.registerNodeType(tag, nodeType);
-                    }
-                }
-            }
-        }
-
-        // check if the reverserproxyttypesewrvice is installed yet.
-        this.nodeTypeService  = (RED.plugins.get("@theotherwillembotha/nodetypeservice") as any).instance as NodeTypeService;
-        if(!this.nodeTypeService) {
-            RED.events.on('plugin.instantiated', nodeTypeServiceListener);
-        }
-    }
-
-    public static get RED() {
-        return NodeManager._RED;
-    }
-    
-    public registerService(type:IServiceClass):NodeManager{
-        let servicePlugin:any = NodeManager.RED.plugins.get(NodeManager.PLUGINID) as PluginDefinition<any>;
-        if(servicePlugin){
-            servicePlugin.instance.install(NodeManager.RED, type);
-        }
-        else{
-            let serviceName = `${type.getServiceDescriptor().sourceFile()}.${type.getServiceDescriptor().name()}`;
-            console.log(`ERROR: plugin ${NodeManager.PLUGINID} does not seem to be loaded. Cannot start service: ${serviceName}`);
-        }
-        return this;
-    }
-
-    public registerNodeType(typeName: string, type: INodeClass):NodeManager{
-        if(!type){
-            console.error(`Type "${typeName}" has no associated type. Make sure that it was exported and included in the index.js file!`)
-        }
-
-        let nodeConstructor = function(this: any, config: BaseNodeConfig | NodeDef){
-            //console.log("constructing node", typeName);
-
-            try{
-                // instantiate the node.
-                NodeManager.RED.nodes.createNode(this, config as any as NodeDef);
-                // assign an instance of it to the config.
-                //(config as any).__node = this;
-
-                // instatiate the actual node.
-                let node = new (type as any)(this, config);
-                //this.__node = node;
-
-                // run the constructor initializers.
-                runPostConstructInitializers(node);
-
-
-                // after the node has been instantiated, attempt to invole the onInit method.
-                if(node.onInit){
-                    node.onInit();
-                }
-            }
-            catch(error){
-                console.log(error);
-                console.log("typeName:", typeName)
-                console.log("type:", type)
-                console.log("config:", config)
-            }
-        }
-
-        try{
-            NodeManager.RED.nodes.registerType(typeName, nodeConstructor, { settings: {}});
-
-            let nodeDescription = type.getNodeDescriptor();
-
-            // registger the node tags.
-            if(this.nodeTypeService){
-                for(let tag of nodeDescription.tags()){
-                    this.nodeTypeService.registerNodeType(tag, type);
-                }
-            }
-            else{
-                this.typeBacklog.push(type);
-            }
-
-        }
-        catch(error){
-            console.error("registering node: " + typeName + " failed", error);
-        }
-        return this;
-    }
-}
-
 export type FlowDeployment = {
     rev:string,
     flows:[FlowElement]
@@ -513,25 +377,27 @@ export abstract class BaseService {
     }
 }
 
-const { JSDOM } = jsdom;
-const md = markdownit({
-  html: true,
-  linkify: true,
-  typographer: true
-})
+// Build-time deps — lazy loaded so they are never required at runtime in production bundles.
+// These are only invoked during `npm run build` (GenerateNodes), never in the deployed container.
+function getJSDOM(): any { return require('jsdom').JSDOM; }
+function getBeautify(): any { return require('js-beautify'); }
+function getHandlebars(): any { return require('handlebars'); }
 
-// Custom renderer for headings
-md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
-  const token = tokens[idx];
-  const level = token.tag.substring(1); // 'h1', 'h2', etc. -> '1', '2'
-  return `<h${level} class="custom-heading">`;
-};
-
-md.renderer.rules.heading_close = function (tokens, idx, options, env, self) {
-  const token = tokens[idx];
-  const level = token.tag.substring(1);
-  return `</h${level}>`;
-};
+let _md: any = null;
+function getMd(): any {
+    if (!_md) {
+        _md = require('markdown-it')({ html: true, linkify: true, typographer: true });
+        _md.renderer.rules.heading_open = (tokens: any[], idx: number) => {
+            const level = tokens[idx].tag.substring(1);
+            return `<h${level} class="custom-heading">`;
+        };
+        _md.renderer.rules.heading_close = (tokens: any[], idx: number) => {
+            const level = tokens[idx].tag.substring(1);
+            return `</h${level}>`;
+        };
+    }
+    return _md;
+}
 
 let beautifyOptions = {
     "indent_size": 4,
@@ -643,7 +509,7 @@ export class NodeBuilder {
         let templateDescriptor = template.template.getTemplateDescriptor();
 
         // load the html source file
-        let uiDom = new JSDOM(fs.readFileSync(templateDescriptor.templateFile()!));
+        let uiDom = new (getJSDOM())(fs.readFileSync(templateDescriptor.templateFile()!));
 
         // apply the onCompose section if available.
         let onCompose = uiDom.window.document.querySelector("script[template-section='onCompose']")?.innerHTML;
@@ -698,6 +564,69 @@ export class NodeBuilder {
         return this;
     }
 
+    public buildOnceHtml(): {source: string, html: string}[] {
+        return this._onIncludeOnce.map(entry => ({
+            source: entry.source,
+            html: this.serializeHTML(entry.source, entry.script)
+        }));
+    }
+
+    public buildDeferredType(): string {
+        // Apply shadow defaults (same side-effect as buildType)
+        let shaddowDefaults = Object.entries(this._defaults).filter(([name, template]) => template.type && template.type.endsWith("[]"));
+        if (shaddowDefaults.length > 0) {
+            this.addIncludeEditSave(this._name + "_shaddowDefaults",
+                `{ let node = this; ` +
+                    shaddowDefaults
+                    .map(([name, template]) => `
+                    for(let i = 0; i < ${template.maxInstances}; i++){
+                        node["_${name}_" + i] = (node.${name}[i] || {}).proxy || "";
+                    }`)
+                    .join("\n\n") +
+                `}`
+            );
+        }
+
+        const registerTypeBody = `{
+            category: '${this._category}',
+            ${(this._category !== "config" && this._icon) ? `icon: '${this._icon}',` : ""}
+            ${(this._category !== "config" && this._color) ? `color: '${this._color}',` : ""}
+            ${(this._category !== "config" && this._labelStyle) ? `labelStyle: '${this._labelStyle}',` : ""}
+            ${(this._label) ? `label: ${this._label},` : ""}
+            ${this._paletteLabel ? `paletteLabel: '${this._paletteLabel}',` : ""}
+            ${(this._category !== "config") ? `inputs:${this._inputs ? "1" : "0"},` : ""}
+            ${(this._category !== "config") ? `inputLabels:(i) => '${this._inputs}',` : ""}
+            ${(this._category !== "config") ? `outputs:${this._outputs.length},` : ""}
+            ${(this._category !== "config") ? `outputLabels:(i) => ${this.serializeProperty(this._outputs)}[i],` : ""}
+            defaults: {
+                ${Object.entries(this._defaults).map(([key, value]) => this.serializeDefault(key, value)).join("\n")}
+            },
+            oneditprepare: function() {
+                ${this._onIncludeEditPrepare.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
+            },
+            oneditsave: function() {
+                ${this._onIncludeEditSave.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
+            },
+            oneditcancel: function() {
+                ${this._onIncludeEditCancel.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
+            },
+            oneditdelete: function() {
+                ${this._onIncludeEditDelete.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
+            },
+        }`;
+
+        return getBeautify().html_beautify(`
+        <script type="text/javascript">
+        (function () {
+            RED.events.on('registry:node-set-added', function (ns) {
+                if (ns.types && ns.types.indexOf('${this._name}') !== -1) {
+                    RED.nodes.registerType('${this._name}', ${registerTypeBody});
+                }
+            });
+        }());
+        </script>`, beautifyOptions);
+    }
+
     private serializeProperty(value:any):string{
         switch(typeof value){
             case "boolean": {
@@ -730,18 +659,18 @@ export class NodeBuilder {
         }
 
         return `<!-- ${source} -->
-        ${Handlebars.compile(script)(context)}
+        ${getHandlebars().compile(script)(context)}
         `
     }
 
-    private serializeJavaScript(source:string, script:string):string{ 
+    private serializeJavaScript(source:string, script:string):string{
         let context = {
-            defaults: (this._category === "config") 
+            defaults: (this._category === "config")
                 ? Object.fromEntries(Object.keys(this._defaults).map(k => [k, `node-config-input-${k}`]))
                 : Object.fromEntries(Object.keys(this._defaults).map(k => [k, `node-input-${k}`]))
         }
 
-        let serialized = Handlebars.compile(script)(context).trim();
+        let serialized = getHandlebars().compile(script)(context).trim();
         if(!serialized.startsWith("{") && !serialized.endsWith("}")){
             serialized = "{\n" + serialized + "\n}";
         }
@@ -751,14 +680,14 @@ export class NodeBuilder {
         `
     }
 
-    private serializeFormEntry(source:string, script:string):string{ 
+    private serializeFormEntry(source:string, script:string):string{
         let context = {
-            defaults: (this._category === "config") 
+            defaults: (this._category === "config")
                 ? Object.fromEntries(Object.keys(this._defaults).map(k => [k, `node-config-input-${k}`]))
                 : Object.fromEntries(Object.keys(this._defaults).map(k => [k, `node-input-${k}`]))
         }
         return `
-            <div id='section_${source}'>${Handlebars.compile(script)(context)}
+            <div id='section_${source}'>${getHandlebars().compile(script)(context)}
             </div>
         `
     }
@@ -787,7 +716,7 @@ export class NodeBuilder {
             );
         }
 
-        return beautify.html_beautify(`
+        return getBeautify().html_beautify(`
         ${this._onIncludeOnce.map(entry => this.serializeHTML(entry.source, entry.script)).join("")}
         <script type="text/javascript">
             RED.nodes.registerType('${this._name}',{      
@@ -821,7 +750,7 @@ export class NodeBuilder {
     };
 
     public buildHtml():string{
-        return beautify.html_beautify(`
+        return getBeautify().html_beautify(`
         <script type="text/html" data-template-name='${this._name}'>
             ${this._onIncludeEditForm.map(entry => this.serializeFormEntry(entry.source, entry.script)).join("")}
         </script>
@@ -854,13 +783,13 @@ let evalInContext = (context: any, js: string) => {
     }
 };
 
-let buildNode = function(node:INodeClass){
+let buildNodeBuilder = function(node: INodeClass): NodeBuilder {
     // get the node descriptor and create the builder.
     let nodeDescriptor = node.getNodeDescriptor();
     let nodeBuilder = new NodeBuilder(nodeDescriptor.id(), nodeDescriptor.group());
 
     // load the html source file
-    let uiDom = new JSDOM(fs.readFileSync(nodeDescriptor.sourceFile()));
+    let uiDom = new (getJSDOM())(fs.readFileSync(nodeDescriptor.sourceFile()));
 
     // apply the onCompose section if available.
     let onCompose = uiDom.window.document.querySelector("script[template-section='onCompose']")?.innerHTML;
@@ -880,10 +809,15 @@ let buildNode = function(node:INodeClass){
     // add some of the dependencies here.
     nodeDescriptor.templates().forEach(template => nodeBuilder.addTemplate(template));
 
-    return [nodeBuilder.buildType(), nodeBuilder.buildHtml(), nodeBuilder.buildDocumentation()].join("\n\n");
+    return nodeBuilder;
+}
 
+let buildNode = function(node:INodeClass){
+    let nodeBuilder = buildNodeBuilder(node);
+    return [nodeBuilder.buildType(), nodeBuilder.buildHtml(), nodeBuilder.buildDocumentation()].join("\n\n");
 }
 
 export {
-    buildNode
+    buildNode,
+    buildNodeBuilder
 }

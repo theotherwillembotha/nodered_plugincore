@@ -6,9 +6,11 @@ import { SourceUtility } from "../../NodeGenerator";
 import { ApiKeyMechanismType, Level, RestAuthType } from "../service/LoggerService";
 import { NodeDescription } from "../../tagging/NodeDescriptionDecorator";
 import { LoggerTemplateConfig } from "../template/LoggerTemplate";
-import { parseURL, URLRecord } from "whatwg-url";
-import { HttpTransportOptions } from "winston/lib/winston/transports";
-import { createLogger, format, transports, Logger } from "winston";
+import type { URLRecord } from "whatwg-url";
+import type { HttpTransportOptions } from "winston/lib/winston/transports";
+import type { Logger } from "winston";
+function getParseURL(): any { return require('whatwg-url').parseURL; }
+function getWinston(): any { return require('winston'); }
 
 interface RestLoggerConfigNodeConfig extends ConfigNodeConfig {
 
@@ -77,7 +79,7 @@ class RestLogger extends AbstractLogger<RestLoggerConfig> {
         super(config);
 
         // get the url.
-        let hosturl:URLRecord|null = parseURL(config.url);
+        let hosturl:URLRecord|null = getParseURL()(config.url);
         if(!hosturl){
             throw Error("could not parse url: " + config.url);
         }
@@ -125,12 +127,13 @@ class RestLogger extends AbstractLogger<RestLoggerConfig> {
             }
         };
 
-        this.winston = createLogger({
+        const w = getWinston();
+        this.winston = w.createLogger({
             level: config.level.toString().toLowerCase(),
-            format: format.json(),
+            format: w.format.json(),
             defaultMeta: {},
             transports: [
-                new transports.Http(httpParams),
+                new w.transports.Http(httpParams),
             ],
         });
     }
