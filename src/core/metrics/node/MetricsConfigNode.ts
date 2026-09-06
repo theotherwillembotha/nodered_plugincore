@@ -1,55 +1,36 @@
-
 import { Node } from "node-red";
-import { ConfigNode, ConfigNodeConfig, NodeDescriptor } from "../../NodeConstructor"
-import { MetricsContainer, MetricsService} from "../service/MetricsService"
-import { SourceUtility } from "../../NodeGenerator";
-import { WebhookTemplate, WebhookTemplateConfig } from "../../webhook/template/WebhookTemplate";
-import { Webhook } from "../../webhook/WebhookDecorator";
-import { EndpointMethodType } from "../../webhook/service/WebhookServerService";
-import type { Request, Response } from 'express';
-function getPrometheusRegistry(): any { return require('prom-client').register; }
-import { NodeDescription } from "../../tagging/NodeDescriptionDecorator";
+import { ConfigNode, ConfigNodeConfig } from "../../NodeConstructor"
+import { MetricsContainer, MetricsService, MetricsConfig } from "../service/MetricsService"
 
-/*
-Note: the MetricsConfigNode does not actually do the deployment of the metrics / repositories.
-The metrics / repositories are menanaged by the plugin and triggered when the flows are deployed.
+/**
+ * Abstract base for all metrics provider config nodes.
+ *
+ * Concrete implementations (e.g. PrometheusMetricsConfigNode) extend this class,
+ * decorate with @NodeDescription + tags: ["MetricsProvider"], and implement
+ * createContainer() to return their backend-specific MetricsContainer.
+ *
+ * This class is intentionally NOT decorated with @NodeDescription — it is never
+ * registered as a Node-RED node type directly. Only concrete subclasses are registered.
+ */
+export abstract class MetricsConfigNode extends ConfigNode<ConfigNodeConfig> {
 
-The reasoning for this is that the Metrics exist outside of the flow, but is configured using the flow.
-Basically, if the metrics arent changed, we dont have to redeploy the metrics, which means that
-stuff like coutners, gauges and timers are not reset.
-*/
-interface MetricsConfigNodeConfig extends ConfigNodeConfig, WebhookTemplateConfig {
-}
-
-@NodeDescription({
-    id:"MetricsConfigNode",
-    name:"Metrics Config Node",
-    group:"config",
-    sourceFile:SourceUtility.getSourcePath("/build/", "/src/") + "MetricsConfigNode.html",
-    package: "@theotherwillembotha/node-red-plugincore",
-    templates:[
-        { template:WebhookTemplate, config: {} }
-    ],
-    dependencies:[ MetricsService ],
-    tags: [ ]
-})
-export class MetricsConfigNode extends ConfigNode<MetricsConfigNodeConfig> {
-    private _metrics!: MetricsContainer;
-
-    constructor(node: Node, config: MetricsConfigNodeConfig){
+    constructor(node: Node, config: ConfigNodeConfig) {
         super(node, config);
-        let _this = this;
-
-        this._metrics = MetricsService.get({metricsEnabled:false, metricsReference:this.id()});
+        MetricsService.register(
+            config.id,
+            { id: config.id },
+            () => this.createContainer({ id: config.id })
+        );
     }
 
-    public metrics():MetricsContainer {
-        return this._metrics;
-    }
+    /**
+     * Called once on construction to create the backend MetricsContainer.
+     * MetricsService preserves the container across redeploys if the config
+     * has not changed, so metric state (counters, gauges) is not reset.
+     */
+    protected abstract createContainer(config: MetricsConfig): MetricsContainer;
 
-    @Webhook({name:"MetricsConfigNode", methods:[EndpointMethodType.GET]})
-    private onWebhookRequest(request:Request, response:Response):void {
-        response.set('Content-Type', getPrometheusRegistry().contentType);
-        this._metrics.registry().metrics().then((data:any) => response.status(200).send(data))
+    public metrics(): MetricsContainer {
+        return MetricsService.get({ metricsEnabled: true, metricsReference: this.id() });
     }
 }

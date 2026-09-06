@@ -1,29 +1,132 @@
 <script type="text/javascript" template-section="onCompose">
     node
         .addDefault("metricsEnabled", { value:false, required:true})
-        .addDefault("metricsReference", {type:"MetricsConfigNode", required:false})
+        .addDefault("metricsReference", { required:false, value:'', type:"DelegatedConfigReferenceNode"})
 </script>
 
 <script type="text/javascript" template-section="onIncludeEditPrepare">
-    let node = this;   
+    let node = this;
 
     let metricsEnabled = $("#{{defaults.metricsEnabled}}");
-    let metricsEnabledSection = $("#section_metricsEnabled");
+    let metricsContainer = metricsEnabled.closest(".editorgroupborder");
+    let metricsEnabledSection = metricsContainer.find("#section_metricsEnabled");
+
+    let getMetricsProviderTypes = async function() {
+        let types = [];
+        await $.ajax({
+            url: "nodetypeservice/find?tag=MetricsProvider",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            success: (response) => { types = response; },
+            error: (jqXHR, textStatus, errorThrown) => { console.log(jqXHR, textStatus, errorThrown); },
+        });
+        return types;
+    };
+
+    let getMetricsProviders = async () => {
+        let providers = [];
+        let providerTypes = (await getMetricsProviderTypes()).map(t => t.id);
+        RED.nodes.eachConfig(cfg => {
+            if (providerTypes.includes(cfg.type)) {
+                providers.push({ id: cfg.id, name: cfg.label(), type: cfg.type });
+            }
+        });
+        return providers;
+    };
+
+    let updateMetricsSelectorList = async () => {
+        metricsSelector.empty();
+        (await getMetricsProviders()).forEach(provider => {
+            $('<option value="' + provider.id + '">' + provider.name + '</option>').appendTo(metricsSelector);
+        });
+        $('<option value="_ADD_">none</option>').appendTo(metricsSelector);
+    };
 
     metricsEnabled.on('change', function() {
-        if(metricsEnabled.prop("checked")){
+        if (metricsEnabled.prop("checked")) {
             metricsEnabledSection.show();
-            node._def.defaults.metricsReference.required = true;
+        } else {
+            metricsEnabledSection.hide();
         }
-        else{
-            metricsEnabledSection.hide()
-            node._def.defaults.metricsReference.required = false;
+    });
+
+    let metricsSelector   = metricsContainer.find("#metrics-selector");
+    let metricsEditButton = metricsContainer.find("#metrics-edit-btn");
+    let metricsAddButton  = metricsContainer.find("#metrics-add-btn");
+
+    metricsEditButton.on('click', async function(event) {
+        event.stopPropagation();
+        if (metricsEditButton.hasClass("disabled")) return;
+        let selectedProvider = (await getMetricsProviders()).find(p => p.id === metricsSelector.val());
+        if (selectedProvider) {
+            RED.editor.editConfig("#metrics-selector", selectedProvider.type, selectedProvider.id);
         }
+    });
+
+
+    metricsAddButton.on('click', function(event) {
+        event.stopPropagation();
+        let $btn = $(event.currentTarget);
+        let btnOffset = $btn.offset();
+        let btnH = $btn.outerHeight();
+        let btnW = $btn.outerWidth();
+        $('.metricstype-dropdown').remove();
+
+        getMetricsProviderTypes().then(providerTypes => {
+            let $dropdown = $('<div class="metricstype-dropdown red-ui-editor"></div>').css({
+                position: 'absolute',
+                zIndex: 1000
+            });
+
+            providerTypes.forEach(providerType => {
+                $('<div class="dropdown-item"></div>')
+                    .text(providerType.name)
+                    .data('value', providerType.id)
+                    .css({ padding: '4px 8px', cursor: 'pointer' })
+                    .appendTo($dropdown);
+            });
+
+            $('body').append($dropdown);
+            $dropdown.css({
+                top:  btnOffset.top + btnH,
+                left: Math.max(0, btnOffset.left + btnW - $dropdown.outerWidth())
+            });
+
+            $(document).on('mousedown.metricsdropdown', function(e) {
+                if (!$(e.target).closest('.metricstype-dropdown').length) {
+                    $dropdown.remove();
+                    $(document).off('mousedown.metricsdropdown');
+                }
+            });
+
+            $dropdown.on('click', '.dropdown-item', function(e) {
+                e.stopPropagation();
+                const selectedValue = $(this).data('value');
+                $dropdown.remove();
+                RED.editor.editConfig("#metrics-selector", selectedValue, "_ADD_");
+            });
+        });
+    });
+
+    metricsSelector.on("focus", updateMetricsSelectorList);
+    metricsSelector.on('change', function() {
+        if ("_ADD_" === metricsSelector.val()) {
+            metricsEditButton.addClass("disabled");
+        } else {
+            metricsEditButton.removeClass("disabled");
+        }
+    });
+
+    updateMetricsSelectorList().then(() => {
+        metricsSelector.val(node.metricsReference);
+        metricsSelector.trigger('change');
     });
 </script>
 
 <script type="text/javascript" template-section="onIncludeEditSave">
- 
+    node = this;
+    var selectedProvider = $("#metrics-selector").val();
+    node.metricsReference = (selectedProvider && selectedProvider !== "_ADD_") ? selectedProvider : '';
 </script>
 
 <script type="text/html" template-section="onIncludeEditForm">
@@ -39,8 +142,18 @@
 
             <div id="section_metricsEnabled">
                 <div class="form-row nomargin">
-                    <label class="towb_editorlabel" for="{{defaults.metricsReference}}">Metric Collector</label>
-                    <input id="{{defaults.metricsReference}}" placeholder="metrics" />
+                    <label class="towb_editorlabel" for="metrics-selector">Metric Provider</label>
+                    <div style="width: 70%; display: inline-flex;">
+                        <select id="metrics-selector" style="flex-grow: 1; min-width: 0;">
+                            <option value="_ADD_">none</option>
+                        </select>
+                        <a id="metrics-edit-btn" class="red-ui-button disabled" style="margin-left: 10px; flex-shrink: 0;">
+                            <i class="fa fa-pencil"></i>
+                        </a>
+                        <a id="metrics-add-btn" class="red-ui-button" style="margin-left: 10px; flex-shrink: 0;">
+                            <i class="fa fa-plus"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -50,5 +163,5 @@
 <script type="text/markdown" template-section="onIncludeDocumentation">
 ### Metrics
 : *enable metrics* (boolean) : if checked, then the node will produce metrics output to the specified metrics provider.
-: *metric collector* (metricconfig) : the collection point or grouping where this particular metric will be attached.
+: *metric provider* (metricsconfig) : the metrics backend that this node will report to.
 </script>

@@ -6,6 +6,7 @@
 <script type="text/javascript" template-section="onIncludeEditPrepare">
     let metricsEnabled = $("#node-{{#if config.isConfigNode}}config-{{/if}}input-metricsEnabled");
     let metricsEnabledSection = $("#section_metricsEnabled");
+    let node = this;
 
     metricsEnabled.on('change', function() {
         if(metricsEnabled.prop("checked")){

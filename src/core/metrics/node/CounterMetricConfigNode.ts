@@ -1,15 +1,15 @@
 
 import { Node } from "node-red";
-import { ConfigNode, ConfigNodeConfig, NodeDescriptor, NodeManager } from "../../NodeConstructor"
-import { MetricsContainer, MetricsService, MetricsReference, CounterMetric, CounterMetricConfig} from "../service/MetricsService"
+import { ConfigNode, ConfigNodeConfig, NodeManager } from "../../NodeConstructor"
+import { MetricsContainer, MetricsService, MetricsReference, CounterMetric, CounterMetricConfig, DoNothingMetricsContainer} from "../service/MetricsService"
 import { SourceUtility } from "../../NodeGenerator";
 import { MetricsConfigNode } from "./MetricsConfigNode";
 import { MetricsTemplate } from "../template/MetricsTemplate";
 import { NodeDescription } from "../../tagging/NodeDescriptionDecorator";
 
 interface CounterMetricConfigNodeConfig extends ConfigNodeConfig, CounterMetricConfig, MetricsReference {
-    description:string,
-    reset:boolean
+    description: string,
+    reset: boolean
 }
 
 @NodeDescription({
@@ -21,7 +21,7 @@ interface CounterMetricConfigNodeConfig extends ConfigNodeConfig, CounterMetricC
     templates:[
         { template:MetricsTemplate, config: {} }
     ],
-    dependencies:[ MetricsConfigNode, MetricsService ],
+    dependencies:[ MetricsService ],
     tags: [ "MetricType" ]
 })
 export class CounterMetricConfigNode extends ConfigNode<CounterMetricConfigNodeConfig> {
@@ -30,33 +30,33 @@ export class CounterMetricConfigNode extends ConfigNode<CounterMetricConfigNodeC
 
     constructor(node: Node, config: CounterMetricConfigNodeConfig){
         super(node, config);
-        let _this = this;
 
-        this._metrics = (NodeManager.RED.nodes.getNode(config.metricsReference) as any).node().metrics();
-        
-        let counterConfig:CounterMetricConfig = {
-            metricname:config.name,
-            metricdescription:config.description,
-            node:{
-                id:this.id(),
-                name:this.name(),
-                flow:this.flow(),
-                type:this.type()
+        const refNode = config.metricsEnabled && config.metricsReference ? NodeManager.RED.nodes.getNode(config.metricsReference) : null;
+        this._metrics = refNode ? (refNode as any).node().metrics() : new DoNothingMetricsContainer();
+
+        const counterConfig: CounterMetricConfig = {
+            metricname: config.name,
+            metricdescription: config.description,
+            node: {
+                id:   this.id(),
+                name: this.name(),
+                flow: this.flow(),
+                type: this.type()
             }
         };
 
         this._counter = this._metrics.counter(counterConfig);
 
-        if(config.reset){
+        if (config.reset) {
             this._counter.reset();
         }
     }
 
-    public metrics():MetricsContainer {
+    public metrics(): MetricsContainer {
         return this._metrics;
     }
 
-    public counter():CounterMetric {
+    public counter(): CounterMetric {
         return this._counter;
     }
 }

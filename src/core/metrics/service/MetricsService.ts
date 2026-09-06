@@ -1,478 +1,237 @@
 import {BaseNode, BaseNodeConfig, BaseService, FlowDeployment} from "../../NodeConstructor"
 import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
-import type { Counter, Gauge, Histogram, HistogramConfiguration, Registry, Summary, SummaryConfiguration } from "prom-client";
 import { NodeAPI, NodeAPISettingsWithData } from "node-red";
-function getPromClient(): any { return require('prom-client'); }
-function getDeepEqual(): any { return require('deep-equal'); }
 
+// ******************************************************* //
+//                   Capability                            //
+// ******************************************************* //
 
-export abstract class Metric<ConfigType extends MetricConfig> {
-  private _config: ConfigType;
-  private _labels: Labels;
-  
-  protected constructor(config:ConfigType){
-    this._config = config;
-    this._labels = {flow:config.node.flow, type:config.node.type, name:config.node.name, id:config.node.id, metric:config.metricname};
-  }
-
-  public labels():Labels {
-    return this._labels;
-  }
-  
-  public config():ConfigType{
-    return this._config;
-  }
+export enum MetricCapability {
+    Counter   = "Counter",
+    Gauge     = "Gauge",
+    Histogram = "Histogram",
+    Summary   = "Summary",
 }
+
+// ******************************************************* //
+//                   Base / Config Types                   //
+// ******************************************************* //
 
 export type MetricsReference = {
-  metricsEnabled:boolean,
-  metricsReference:string
+    metricsEnabled: boolean,
+    metricsReference: string
 }
 
-// **************************************************** //
-//                   Counter                            //
-// **************************************************** //
-
-
-type CounterCallback = {
-  (state:CounterState):void;
-};
-
-export type CounterState = {
-  value:number,
-  labels:{}
+export interface MetricsConfig {
+    id: string;
 }
 
-export interface CounterMetricConfig extends MetricConfig { 
-  
+export interface NodeReference {
+    name: string;
+    type: string;
+    flow: string;
+    id: string;
 }
 
-export class CounterMetric extends Metric<CounterMetricConfig>{
-  private counter: Counter;
-  private internalCounter: any;
-  private subscribers:{[key:string]:CounterCallback} = {};
-  constructor(id:string, config:CounterMetricConfig, registry: Registry){
-    super(config);
-
-    this.counter = new (getPromClient().Counter)({
-      name: id,
-      help: (config.metricdescription) ? config.metricdescription: config.metricname,
-      labelNames: Object.keys(this.labels()),
-      registers: [registry]
-    });
-    this.counter.reset();
-    this.internalCounter = this.counter.labels(this.labels() as any);
-  }
-
-  public inc():CounterMetric{
-    this.internalCounter.inc();
-    this.get().then(state => Object.values(this.subscribers).forEach(callback => callback(state)));
-    return this;
-  }
-
-  public async get():Promise<CounterState> {
-    return this.counter.get().then(t => t.values[0]);
-  }
-
-  public reset():void{
-    this.counter.reset();
-  }
-
-  public subscribe(node:BaseNode<BaseNodeConfig>, callback:CounterCallback){
-    this.subscribers[node.id()] = callback;
-  }
-
-  public unsubscribe(node:BaseNode<BaseNodeConfig>){
-    delete this.subscribers[node.id()];
-  }
+export interface MetricConfig {
+    node: NodeReference;
+    metricname: string;
+    metricdescription?: string;
 }
 
-// **************************************************** //
-//                   Gauge                              //
-// **************************************************** //
-type GaugeCallback = {
-  (state:GaugeState):void;
-};
-
-export interface GaugeState {
-  value: number
+interface Labels {
+    flow: string;
+    type: string;
+    name: string;
+    id: string;
+    metric: string;
 }
 
-export interface GaugeMetricConfig  extends MetricConfig {
+export abstract class Metric<ConfigType extends MetricConfig> {
+    private _config: ConfigType;
+    private _labels: Labels;
 
-}
-
-export class GaugeMetric extends Metric<GaugeMetricConfig>{
-  private collector: number = 0;
-  private gauge: any;
-  private subscribers:{[key:string]:GaugeCallback} = {};
-
-  constructor(id:string, config:GaugeMetricConfig, registry: Registry){
-    super(config);
-    let _this = this;
-
-    this.gauge = new (getPromClient().Gauge)({
-      name: id,
-      help: (config.metricdescription) ? config.metricdescription: config.metricname,
-      registers: [registry],
-      labelNames: Object.keys(this.labels()),
-      // this function is called every time the stats are collected.
-      // the response value needs to be set.
-      collect() { this.labels(_this.labels() as {}).set(_this.collector); }
-    })
-  }
-
-  public inc():GaugeMetric{
-    this.collector+=1;
-    let state:GaugeState = this.get();
-    Object.values(this.subscribers).forEach(sub => sub(state));
-    return this;
-  }
-
-  public dec():GaugeMetric{
-    this.collector-=1;
-    let state:GaugeState = this.get();
-    Object.values(this.subscribers).forEach(sub => sub(state));
-    return this;
-  }
-
-  public get():GaugeState {
-    return {
-      value:this.collector,
+    protected constructor(config: ConfigType) {
+        this._config = config;
+        this._labels = {
+            flow: config.node.flow,
+            type: config.node.type,
+            name: config.node.name,
+            id: config.node.id,
+            metric: config.metricname
+        };
     }
-  }
 
-  public reset():void {
-    this.collector = 0;
-  }
-
-  public subscribe(node:BaseNode<BaseNodeConfig>, callback:GaugeCallback){
-    this.subscribers[node.id()] = callback;
-  }
-
-  public unsubscribe(node:BaseNode<BaseNodeConfig>){
-    delete this.subscribers[node.id()];
-  }
+    public labels(): Labels { return this._labels; }
+    public config(): ConfigType { return this._config; }
 }
 
-// **************************************************** //
-//                   Histogram                          //
-// **************************************************** //
+// ******************************************************* //
+//                   Counter                               //
+// ******************************************************* //
 
-type HistogramCallback = {
-  (state:HistogramState):void;
-};
+export type CounterState = { value: number, labels: {} }
+export type CounterCallback = (state: CounterState) => void;
+export interface CounterMetricConfig extends MetricConfig { }
 
-export interface DefaultBucketConfig{
-
+export interface CounterMetric {
+    inc(): this;
+    reset(): void;
+    get(): Promise<CounterState>;
+    subscribe(node: BaseNode<BaseNodeConfig>, callback: CounterCallback): void;
+    unsubscribe(node: BaseNode<BaseNodeConfig>): void;
 }
 
-export interface ManualBucketConfig{
-  intervals:number[];  
+export class DoNothingCounterMetric implements CounterMetric {
+    public inc(): this { return this; }
+    public reset(): void {}
+    public get(): Promise<CounterState> { return Promise.resolve({ value: 0, labels: {} }); }
+    public subscribe(_node: BaseNode<BaseNodeConfig>, _callback: CounterCallback): void {}
+    public unsubscribe(_node: BaseNode<BaseNodeConfig>): void {}
 }
 
-export interface LinearBucketConfig{
-  start:number;
-  interval:number;
-  count:number;
+// ******************************************************* //
+//                   Gauge                                 //
+// ******************************************************* //
+
+export type GaugeState = { value: number }
+export type GaugeCallback = (state: GaugeState) => void;
+export interface GaugeMetricConfig extends MetricConfig { }
+
+export interface GaugeMetric {
+    inc(): this;
+    dec(): this;
+    reset(): void;
+    get(): GaugeState;
+    subscribe(node: BaseNode<BaseNodeConfig>, callback: GaugeCallback): void;
+    unsubscribe(node: BaseNode<BaseNodeConfig>): void;
 }
 
-export interface ExponentialBucketConfig{
-  start:number;
-  factor:number;
-  count:number;
+export class DoNothingGaugeMetric implements GaugeMetric {
+    public inc(): this { return this; }
+    public dec(): this { return this; }
+    public reset(): void {}
+    public get(): GaugeState { return { value: 0 }; }
+    public subscribe(_node: BaseNode<BaseNodeConfig>, _callback: GaugeCallback): void {}
+    public unsubscribe(_node: BaseNode<BaseNodeConfig>): void {}
 }
+
+// ******************************************************* //
+//                   Histogram                             //
+// ******************************************************* //
+
+export type HistogramState = { average(): number | undefined; }
+export type HistogramCallback = (state: HistogramState) => void;
+
+export enum BucketType {
+    default     = "default",
+    manual      = "manual",
+    linear      = "linear",
+    exponential = "exponential"
+}
+
+export interface DefaultBucketConfig { }
+export interface ManualBucketConfig { intervals: number[]; }
+export interface LinearBucketConfig { start: number; interval: number; count: number; }
+export interface ExponentialBucketConfig { start: number; factor: number; count: number; }
 
 export interface HistogramMetricConfig extends MetricConfig {
-  buckettype:BucketType,
-  bucketconfig:DefaultBucketConfig|ManualBucketConfig|LinearBucketConfig|ExponentialBucketConfig
+    buckettype: BucketType;
+    bucketconfig: DefaultBucketConfig | ManualBucketConfig | LinearBucketConfig | ExponentialBucketConfig;
 }
 
-export enum BucketType{
-  default = "default",
-  manual = "manual",
-  linear = "linear",
-  exponential = "exponential"
+export interface HistogramMetric {
+    observe(value: number): void;
+    subscribe(node: BaseNode<BaseNodeConfig>, callback: HistogramCallback): void;
+    unsubscribe(node: BaseNode<BaseNodeConfig>): void;
 }
 
-export class HistogramMetric extends Metric<HistogramMetricConfig> {
-
-  private histogram: Histogram;
-  private subscribers:{[key:string]:HistogramCallback} = {};
-
-  constructor(id:string, config:HistogramMetricConfig, registry:Registry){
-    super(config);
-
-    // Build the Histogram Config.
-    let histogramConfig:HistogramConfiguration<string> = {
-      name: id,
-      help: (config.metricdescription) ? config.metricdescription: config.metricname,
-      labelNames: Object.keys(this.labels()),
-      registers:[registry]
-    }
-
-    if(config.buckettype === BucketType.default){
-      let bucketConfig = (config.bucketconfig as DefaultBucketConfig);
-      // do nothing
-    }
-    if(config.buckettype === BucketType.manual){
-      let bucketConfig = (config.bucketconfig as ManualBucketConfig);
-      histogramConfig.buckets = bucketConfig.intervals;
-    }
-    if(config.buckettype === BucketType.linear){
-      let bucketConfig = (config.bucketconfig as LinearBucketConfig);
-      histogramConfig.buckets = getPromClient().linearBuckets(bucketConfig.start, bucketConfig.interval, bucketConfig.count);
-    }
-    if(config.buckettype === BucketType.exponential){
-      let bucketConfig = (config.bucketconfig as ExponentialBucketConfig);
-      histogramConfig.buckets = getPromClient().exponentialBuckets(bucketConfig.start, bucketConfig.factor, bucketConfig.count);
-    }
-
-    this.histogram = new (getPromClient().Histogram)(histogramConfig);
-    this.histogram.zero(this.labels() as any);
-  }
-
-  public observe(value:number){
-    this.histogram.labels(this.labels() as any).observe(value);
-    this.get().then(status => Object.values(this.subscribers).forEach(subscriber => subscriber(status)));
-  }
-
-  public async get():Promise<HistogramState>{
-    return this.histogram.get().then(t => new HistogramState(t.values));
-  }
-
-  public subscribe(node:BaseNode<BaseNodeConfig>, callback:HistogramCallback){
-    this.subscribers[node.id()] = callback;
-  }
-
-  public unsubscribe(node:BaseNode<BaseNodeConfig>){
-    delete this.subscribers[node.id()];
-  }
+export class DoNothingHistogramMetric implements HistogramMetric {
+    public observe(_value: number): void {}
+    public subscribe(_node: BaseNode<BaseNodeConfig>, _callback: HistogramCallback): void {}
+    public unsubscribe(_node: BaseNode<BaseNodeConfig>): void {}
 }
 
-class HistogramState {
-  private _values: { labels: any; value: number; metricName?:string }[];
-  private _average: number | undefined;
+// ******************************************************* //
+//                   Summary                               //
+// ******************************************************* //
 
-  constructor(values:{labels:any, value:number, metricName?:string}[]){
-    this._values = values;
-    
-    let sum = this._values.find(value => value.metricName?.endsWith("_sum"))?.value;
-    let count = this._values.find(value => value.metricName?.endsWith("_count"))?.value;
-    this._average = (sum && count) ? sum/count : undefined;
-  }
-
-  public average():number|undefined{
-    return this._average;
-  }
-}
-
-// **************************************************** //
-//                     Summary                          //
-// **************************************************** //
-
-interface PercentileConfig{}
-
-class SummaryState {
-  private _values: { labels: any; value: number; metricName?:string }[];
-  private _average: number | undefined;
-
-  constructor(values:{labels:any, value:number, metricName?:string}[]){
-    this._values = values;
-
-    let sum = this._values.find(value => value.metricName?.endsWith("_sum"))?.value;
-    let count = this._values.find(value => value.metricName?.endsWith("_count"))?.value;
-    this._average = (sum && count) ? sum/count : undefined;
-  }
-
-  public average():number|undefined{
-    return this._average;
-  }
-}
-
-type SummaryCallback = (state:SummaryState) => void
-
-export interface DefaultPercentileConfig extends PercentileConfig {
-}
-
-export interface ManualPercentileConfig extends PercentileConfig {
-  percentiles:number[]
-}
-
-export interface SummaryMetricConfig extends MetricConfig {
-  percentileType:PercentileType,
-  percentileConfig:PercentileConfig
-}
+export type SummaryState = { average(): number | undefined; }
+export type SummaryCallback = (state: SummaryState) => void;
 
 export enum PercentileType {
-  default = "default",
-  manual = "manual"
+    default = "default",
+    manual  = "manual"
 }
 
-export class SummaryMetric extends Metric<SummaryMetricConfig> {
-  private summary: Summary;
-  private subscribers:{[key:string]:SummaryCallback} = {};
-  
-  constructor(id:string, config:SummaryMetricConfig, registry:Registry){
-    super(config);
+export interface DefaultPercentileConfig { }
+export interface ManualPercentileConfig { percentiles: number[]; }
 
-    let summaryConfig:SummaryConfiguration<string> = {
-      name: id,
-      help: (config.metricdescription) ? config.metricdescription: config.metricname,
-      labelNames: Object.keys(this.labels()),
-      registers:[registry],
-    };
-
-    if(config.percentileType === PercentileType.default){
-      // do nothing.
-      let perceintileConfig:DefaultPercentileConfig = config.percentileConfig as DefaultPercentileConfig;
-      summaryConfig.percentiles = [0.01, 0.1, 0.9, 0.99];
-    }
-    
-    if(config.percentileType === PercentileType.manual){
-      let percentilesConfig:ManualPercentileConfig = config.percentileConfig as ManualPercentileConfig;
-      summaryConfig.percentiles = percentilesConfig.percentiles;
-    }
-
-    this.summary = new (getPromClient().Summary)(summaryConfig);
-    //this.summary.zero(this._labels as any);
-  }
-
-  public observe(value:number){
-    this.summary.labels(this.labels() as any).observe(value);
-    this.get().then(status => Object.values(this.subscribers).forEach(subscriber => subscriber(status)));
-  }
-
-  public async get():Promise<SummaryState>{
-    return this.summary.get().then(s => new SummaryState(s.values));
-  }
-
-  public subscribe(node:BaseNode<BaseNodeConfig>, callback:SummaryCallback){
-    this.subscribers[node.id()] = callback;
-  }
-
-  public unsubscribe(node:BaseNode<BaseNodeConfig>){
-    delete this.subscribers[node.id()];
-  }
+export interface SummaryMetricConfig extends MetricConfig {
+    percentileType: PercentileType;
+    percentileConfig: DefaultPercentileConfig | ManualPercentileConfig;
 }
 
-// **************************************************** //
-//                   COMMONS                            //
-// **************************************************** //
-interface Labels {
-  flow:string;
-  type:string;
-  name:string;
-  id:string;
-  metric:string;
+export interface SummaryMetric {
+    observe(value: number): void;
+    subscribe(node: BaseNode<BaseNodeConfig>, callback: SummaryCallback): void;
+    unsubscribe(node: BaseNode<BaseNodeConfig>): void;
 }
 
-export class MetricsContainer {
-  private _config: MetricsConfig;
-  private _registry: Registry;
-
-  private counters:{[key:string]:CounterMetric} = {};
-  private histograms:{[key:string]:HistogramMetric}  = {};
-  private gauges:{[key:string]:GaugeMetric}  = {};
-  private summaries:{[key:string]:SummaryMetric} = {};
-  
-  constructor(config:MetricsConfig){
-    this._config = config;
-
-    // create a registry with the config.
-    this._registry = new (getPromClient().Registry)();
-
-  }
-
-  close() {
-    this._registry.clear();
-  }
-
-  public registry(): Registry {
-    return this._registry;
-  }
-
-  // return true if the two configurations are not the same.
-  hasChanged(config: MetricsConfig): boolean {
-    return !(
-      this._config.metricsPath === config.metricsPath &&
-      this._config.metricsPort === config.metricsPort
-    );
-  }
-
-  public counter(config: CounterMetricConfig): CounterMetric{
-    const counterId = `counter_${config.node.id}`;
-    let counter:CounterMetric = this.counters[counterId];
-    if(counter){
-      // check if the config has changed much.
-      if(!getDeepEqual()(counter.config(), config)){
-        this._registry.removeSingleMetric(counterId);
-        this.counters[counterId] = (counter = new CounterMetric(counterId, config, this._registry));
-      }
-    }
-    else{
-      this.counters[counterId] = (counter = new CounterMetric(counterId, config, this._registry));
-    }
-    
-    return counter;
-  }
-
-  public gauge(config: GaugeMetricConfig): GaugeMetric {
-    var gaugeId = `gauge_${config.node.id}`;
-    var gauge:GaugeMetric = this.gauges[gaugeId];
-    if(gauge){
-      // check if the config has changed much.
-      if(!getDeepEqual()(gauge.config(), config)){
-        this._registry.removeSingleMetric(gaugeId);
-        this.gauges[gaugeId] = (gauge = new GaugeMetric(gaugeId, config, this._registry));
-      }
-    }
-    else{
-      this.gauges[gaugeId] = (gauge = new GaugeMetric(gaugeId, config, this._registry));
-    }
-    return gauge;
-  }
-
-  public histogram(config: HistogramMetricConfig): HistogramMetric {
-    const histogramId = `histogram_${config.node.id}`;
-    let histogram:HistogramMetric = this.histograms[histogramId];
-    if(histogram){
-      // check if the config has changed much.
-      if(!getDeepEqual()(histogram.config(), config)){
-        this._registry.removeSingleMetric(histogramId);
-        this.histograms[histogramId] = (histogram = new HistogramMetric(histogramId, config, this._registry));
-      }
-    }
-    else{
-      this.histograms[histogramId] = (histogram = new HistogramMetric(histogramId, config, this._registry));
-    }
-
-    return histogram;
-  }
-
-  public summary(config: SummaryMetricConfig): SummaryMetric {
-    const summaryId = `summary_${config.node.id}`;
-    let summary:SummaryMetric = this.summaries[summaryId];
-    if(summary){
-      if(!getDeepEqual()(summary.config(), config)){
-        this._registry.removeSingleMetric(summaryId);
-        this.summaries[summaryId] = (summary = new SummaryMetric(summaryId, config, this._registry));
-      }
-    }
-    else{
-      this.summaries[summaryId] = (summary = new SummaryMetric(summaryId, config, this._registry));
-    }
-
-    return summary;
-  }
+export class DoNothingSummaryMetric implements SummaryMetric {
+    public observe(_value: number): void {}
+    public subscribe(_node: BaseNode<BaseNodeConfig>, _callback: SummaryCallback): void {}
+    public unsubscribe(_node: BaseNode<BaseNodeConfig>): void {}
 }
 
+// ******************************************************* //
+//                   MetricsContainer                      //
+// ******************************************************* //
 
-// Stored on global so all bundled copies of MetricsService share the same registry.
+export abstract class MetricsContainer {
+    public abstract supports(capability: MetricCapability): boolean;
+    public abstract hasChanged(config: MetricsConfig): boolean;
+    public abstract close(): void;
+
+    // Default implementations warn and return DoNothing — providers override what they support.
+    public counter(_config: CounterMetricConfig): CounterMetric {
+        console.warn(`[PluginCore] MetricsContainer: Counter is not supported by this provider.`);
+        return new DoNothingCounterMetric();
+    }
+    public gauge(_config: GaugeMetricConfig): GaugeMetric {
+        console.warn(`[PluginCore] MetricsContainer: Gauge is not supported by this provider.`);
+        return new DoNothingGaugeMetric();
+    }
+    public histogram(_config: HistogramMetricConfig): HistogramMetric {
+        console.warn(`[PluginCore] MetricsContainer: Histogram is not supported by this provider.`);
+        return new DoNothingHistogramMetric();
+    }
+    public summary(_config: SummaryMetricConfig): SummaryMetric {
+        console.warn(`[PluginCore] MetricsContainer: Summary is not supported by this provider.`);
+        return new DoNothingSummaryMetric();
+    }
+}
+
+// Silent DoNothing — returned when no provider is installed. Does not warn since this is expected.
+export class DoNothingMetricsContainer extends MetricsContainer {
+    public supports(_capability: MetricCapability): boolean { return false; }
+    public hasChanged(_config: MetricsConfig): boolean { return false; }
+    public close(): void {}
+    public counter(_config: CounterMetricConfig): CounterMetric { return new DoNothingCounterMetric(); }
+    public gauge(_config: GaugeMetricConfig): GaugeMetric { return new DoNothingGaugeMetric(); }
+    public histogram(_config: HistogramMetricConfig): HistogramMetric { return new DoNothingHistogramMetric(); }
+    public summary(_config: SummaryMetricConfig): SummaryMetric { return new DoNothingSummaryMetric(); }
+}
+
+// ******************************************************* //
+//                   MetricsService                        //
+// ******************************************************* //
+
 const _GLOBAL_METRICS_KEY = '__plugincore_metrics__';
-function getMetricsStore(): {[key:string]:MetricsContainer} {
-  if (!(global as any)[_GLOBAL_METRICS_KEY]) (global as any)[_GLOBAL_METRICS_KEY] = {};
-  return (global as any)[_GLOBAL_METRICS_KEY];
+
+function getMetricsStore(): { [key: string]: MetricsContainer } {
+    if (!(global as any)[_GLOBAL_METRICS_KEY]) (global as any)[_GLOBAL_METRICS_KEY] = {};
+    return (global as any)[_GLOBAL_METRICS_KEY];
 }
 
 @ServiceDescription({
@@ -481,85 +240,46 @@ function getMetricsStore(): {[key:string]:MetricsContainer} {
 })
 export class MetricsService extends BaseService {
 
-  private red!: NodeAPI<NodeAPISettingsWithData>;
-  
-  public constructor(){
-    super("MetricsService");
-  }
+    private red!: NodeAPI<NodeAPISettingsWithData>;
 
-  public init(red: NodeAPI<NodeAPISettingsWithData>): void {
-    this.red = red;
-  }
+    public constructor() {
+        super("MetricsService");
+    }
 
-  public deinit(red: NodeAPI<NodeAPISettingsWithData>): void {
-  }
+    public init(red: NodeAPI<NodeAPISettingsWithData>): void {
+        this.red = red;
+    }
 
-  public async onDeploy(deployment: FlowDeployment): Promise<void> {
-    // get the FlowElements.
-    let configNodes:{[key:string]:MetricsConfig} = {};
-    deployment.flows
-      .filter(element => element.type === "MetricsConfigNode")
-      .forEach(element => configNodes[element.id] = element as any as MetricsConfig);
+    public deinit(_red: NodeAPI<NodeAPISettingsWithData>): void {}
 
-    const store = getMetricsStore();
+    public async onDeploy(deployment: FlowDeployment): Promise<void> {
+        const store = getMetricsStore();
+        const flowIds = new Set(deployment.flows.map(e => e.id));
 
-    // retire metrics that have been removed or that have changed.
-    Object.entries(store)
-      .filter(([id, metric]) => !configNodes[id] || metric.hasChanged(configNodes[id]))
-      .forEach(([id, metric]) => {
-        delete store[id];
-        metric.close();
-      });
+        Object.entries(store)
+            .filter(([id]) => !flowIds.has(id))
+            .forEach(([id, container]) => {
+                delete store[id];
+                container.close();
+            });
 
-    // create the new metrics.
-    Object.entries(configNodes)
-      .filter(([id, metricConfig]) => !store[id])
-      .forEach(([id, metricConfig]) => {
-        store[id] = new MetricsContainer(metricConfig);
-      })
+        return Promise.resolve();
+    }
 
-    return Promise.resolve();
-  }
+    /**
+     * Called by MetricsConfigNode subclasses on construction.
+     * Preserves an existing container across redeploys if the config has not changed
+     * (so counters/gauges are not reset unnecessarily).
+     */
+    public static register(id: string, config: MetricsConfig, factory: () => MetricsContainer): void {
+        const store = getMetricsStore();
+        const existing = store[id];
+        if (existing && !existing.hasChanged(config)) return;
+        if (existing) existing.close();
+        store[id] = factory();
+    }
 
-  public static get(reference:MetricsReference):MetricsContainer{
-    return getMetricsStore()[reference.metricsReference];
-  }
-
+    public static get(reference: MetricsReference): MetricsContainer {
+        return getMetricsStore()[reference.metricsReference] ?? new DoNothingMetricsContainer();
+    }
 }
-
-export interface MetricsConfig {
-  id:string,
-  metricsPath:string,
-  metricsPort:number,
-}
-
-export interface NodeReference {
-  name: string;
-  type: string;
-  flow: string;
-  id: string;
-}
-
-export interface MetricConfig{
-  node:NodeReference;
-  metricname: string;
-  metricdescription?: string;
-}
-
-/*
-Quick explanation of how this is supposed to work:
-
-when you deploy a new metricConfig, it should create an instance of "Metric" in the backend.
-this instance should survive flow redeployments, but should be removed if the flow that
-gets deployed no longer contains the metric. The idea is to not have the metrics reset between
-flow deployments or to have the Metric / Repository become unavialable between deployments.
-
-users should be able to access it in this way:
-
-MetricsService.get(<MetricReference>).createCounter(<counterConfig>), though this is mostly just intended for use in the MetricConfigClass.
-
-Normally, a handle on the MetricsService should be gained by pulling a reference to the MetricsConfigNode, eg
-  this._metrics = (NodeManager.RED.nodes.getNode(config.metricsReference) as any).node().metrics();
-  this._counter = this._metrics.counter(this, "messages", "Number of messages that have passed through this node");
-
-*/

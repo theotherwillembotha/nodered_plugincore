@@ -7,14 +7,13 @@ import { WebhookServerConfigNode, WebhookServerService, WebhookTemplate,  } from
 import {LoggerService, LoggerTemplate } from "./index.js";
 
 import { MetricsService, MetricsTemplate, CounterMetricTemplate, GaugeMetricTemplate} from "./index.js";
-import { MetricsConfigNode, GaugeMetricConfigNode, TimerMetricConfigNode, CounterMetricConfigNode } from "./index.js";
 
 new NodeGenerator("./src/core/")
     // services.
     .registerService(LoggerService)
     .registerService(MetricsService)
     .registerService(SettingsService)
-    .registerService(WebhookServerService)  
+    .registerService(WebhookServerService)
     .registerService(NodeTypeService)
 
     // templates.
@@ -34,10 +33,6 @@ new NodeGenerator("./src/core/")
     .registerNode(ConsoleLoggerConfigNode)
     .registerNode(RestLoggerConfigNode)
 
-    .registerNode(MetricsConfigNode)
-    .registerNode(CounterMetricConfigNode)
-    .registerNode(GaugeMetricConfigNode)
-    .registerNode(TimerMetricConfigNode)
     .registerNode(WebhookServerConfigNode)
 
     // done.
