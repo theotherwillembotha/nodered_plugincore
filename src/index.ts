@@ -20,6 +20,12 @@ export * from "./core/metrics/node/GaugeMetricConfigNode";
 export * from "./core/metrics/node/TimerMetricConfigNode";
 export * from "./core/metrics/template/TimerMetricTemplate";
 
+// STATE
+export * from "./core/state/service/StateService";
+export * from "./core/state/node/StateConfigNode";
+export * from "./core/state/node/InternalStateConfigNode";
+export * from "./core/state/template/StateTemplate";
+
 // TAGGING
 export * from "./core/tagging/service/NodeTypeService";
 export * from "./core/tagging/NodeDescriptionDecorator";

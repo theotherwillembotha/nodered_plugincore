@@ -1,0 +1,77 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name",             { value: "Internal State", required: true })
+        .addDefault("survivesRedeploy", { value: false, required: false })
+        .addDefault("survivesRestart",  { value: false, required: false })
+        .setPaletteLabel("Internal State")
+        .setLabel(function() { return this.name || "Internal State"; })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+{
+    // Auto-populate the name from the consumer node's context when this is a fresh node.
+    let nameInput = $("#node-config-input-name");
+    let ctx = window.__stateTemplateContext || {};
+    if (ctx.defaultName && (!nameInput.val() || nameInput.val() === "Internal State")) {
+        nameInput.val(ctx.defaultName);
+    }
+    window.__stateTemplateContext = null;
+
+    // When "survives restart" is checked, "survives redeploy" must also be checked.
+    let survivesRestart  = $("#node-config-input-survivesRestart");
+    let survivesRedeploy = $("#node-config-input-survivesRedeploy");
+
+    survivesRestart.on("change", function() {
+        if (survivesRestart.prop("checked")) {
+            survivesRedeploy.prop("checked", true).prop("disabled", true);
+        } else {
+            survivesRedeploy.prop("disabled", false);
+        }
+    });
+
+    survivesRestart.trigger("change");
+}
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <span style="display:inline-block; padding: 4px 0; color:#888;">
+            <i class="fa fa-database" style="margin-right:6px;"></i>Internal State Provider
+        </span>
+    </div>
+
+    <!-- Name is stored but not shown — auto-set from the consumer node's name + suffix. -->
+    <input type="hidden" id="node-config-input-name" />
+
+    <div class="form-row editorsectionheading" style="margin-top:8px;">
+        <i class="w-16 fa fa-database"></i> <span>Persistence</span>
+    </div>
+    <div class="editorgroupborder">
+        <div class="form-row nomargin">
+            <input type="checkbox" id="node-config-input-survivesRedeploy" style="margin: 8px 0 10px 130px; width:20px;" />
+            <label style="width:auto;" for="node-config-input-survivesRedeploy">Survives redeploy</label>
+        </div>
+        <div class="form-row nomargin">
+            <input type="checkbox" id="node-config-input-survivesRestart" style="margin: 8px 0 10px 130px; width:20px;" />
+            <label style="width:auto;" for="node-config-input-survivesRestart">Survives restart <span style="color:#aaa; font-size:0.85em;">(also writes to disk)</span></label>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+Stores a named state value in memory, optionally persisted across redeployments or process restarts.
+
+### Properties
+
+: *survives redeploy* (boolean) : When checked, the current state value is preserved across Node-RED flow redeployments. When unchecked (default), state resets on each deploy.
+: *survives restart*  (boolean) : When checked, the current state is written to disk and restored after a process restart. Automatically implies "survives redeploy".
+
+### Details
+
+The initial (default) state value is provided by the node that owns this config — for example, a Circuit Breaker Config Node sets the state to its configured **Default State** if no value has been stored yet.
+
+When **Survives Restart** is enabled, state is persisted to `<userDir>/internalstate/<nodeId>.json` and automatically restored on the next startup.
+</script>

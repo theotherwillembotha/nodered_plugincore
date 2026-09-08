@@ -45,8 +45,6 @@ node
 </div>
 
 <script type="text/javascript" template-section="onIncludeEditPrepare">
-{
-    let node = this;
 
     let showSelectedAutnetication = function(value){
         let webhookConfig = $("#section_webhookconfig");
@@ -312,13 +310,10 @@ node
 
     this.reverseProxies_connections = (this.reverseProxies_connections) ? this.reverseProxies_connections : [];
     reverseProxyList.editableList('addItems', this.reverseProxies_connections);
-}
+
 </script>
 
 <script type="text/javascript" template-section="onIncludeEditSave">
-{
-    let node = this;
-
     // pulling the values from the reverseproxy table.
     let connectionList = $("#reverseproxylist_table").editableList('items');
     node.reverseProxies_connections = [];
@@ -330,7 +325,6 @@ node
     });
 
     console.log(node.reverseProxies_connections);
-}
 </script>
 
 <script type="text/html" template-section="onIncludeEditForm">
@@ -388,19 +382,18 @@ node
             </div>
 
             <div id="section_reverseproxy_feature">
-            <div class="form-row">
-                <label>Reverse Proxy</label>
-                <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="width:20px; margin-right:5px;" />
-                <label style="width:auto" for="{{defaults.reverseProxies_enabled}}"><span>Enable Reverse Proxy</span></label>
-            </div>
-            <div id="section_webhookconfig_reverseproxy" style="display:none">
                 <div class="form-row">
-                    <label></label>
-                    <ol id="reverseproxylist_table" class="theotherwillembotha-compact-table"></ol>
+                    <label>Reverse Proxy</label>
+                    <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="width:20px; margin-right:5px;" />
+                    <label style="width:auto" for="{{defaults.reverseProxies_enabled}}"><span>Enable Reverse Proxy</span></label>
+                </div>
+                <div id="section_webhookconfig_reverseproxy" style="display:none">
+                    <div class="form-row">
+                        <label></label>
+                        <ol id="reverseproxylist_table" class="theotherwillembotha-compact-table"></ol>
+                    </div>
                 </div>
             </div>
-            </div>
-
 
         </div>
     </div>

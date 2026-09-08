@@ -7,6 +7,7 @@ import { WebhookServerConfigNode, WebhookServerService, WebhookTemplate,  } from
 import {LoggerService, LoggerTemplate } from "./index.js";
 
 import { MetricsService, MetricsTemplate, CounterMetricTemplate, GaugeMetricTemplate} from "./index.js";
+import { StateService, StateTemplate, InternalStateConfigNode } from "./index.js";
 
 new NodeGenerator("./src/core/")
     // services.
@@ -15,6 +16,7 @@ new NodeGenerator("./src/core/")
     .registerService(SettingsService)
     .registerService(WebhookServerService)
     .registerService(NodeTypeService)
+    .registerService(StateService)
 
     // templates.
     .registerTemplate(BasicTemplate)
@@ -27,6 +29,7 @@ new NodeGenerator("./src/core/")
     .registerTemplate(WebhookTemplate)
     .registerTemplate(UIHelperTemplate)
     .registerTemplate(ScriptEditorTemplate)
+    .registerTemplate(StateTemplate)
 
     // nodes
     .registerNode(DelegatedConfigReferenceNode)
@@ -34,6 +37,7 @@ new NodeGenerator("./src/core/")
     .registerNode(RestLoggerConfigNode)
 
     .registerNode(WebhookServerConfigNode)
+    .registerNode(InternalStateConfigNode)
 
     // done.
     .generate("./build/Nodes", "./build/Plugins");

@@ -1,0 +1,244 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("stateReference", { required: false, value: '', type: "DelegatedConfigReferenceNode" })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+
+    // Read name suffix and declared states from the build-time templateConfig injected by NodeConstructor.
+    let _stateNameSuffix = (templateConfig && templateConfig.nameSuffix) ? templateConfig.nameSuffix : '-State';
+    let _stateStates     = (templateConfig && templateConfig.defaultStates) ? templateConfig.defaultStates : null;
+
+    let stateSection     = $("#state-config-section");
+    let typeSelector     = stateSection.find("#state-type-selector");
+    let configureBtn     = stateSection.find("#state-configure-btn");
+    let stateRefSelector = stateSection.find("#state-ref-selector");
+
+    // Seed the hidden select with the current value and record the original for cleanup.
+    stateRefSelector.empty();
+    if (node.stateReference) {
+        let existingNode = RED.nodes.node(node.stateReference);
+        let label = existingNode ? (existingNode.name || node.stateReference) : node.stateReference;
+        stateRefSelector.append($('<option>').val(node.stateReference).text(label));
+        stateRefSelector.val(node.stateReference);
+    }
+    stateRefSelector.data('originalRef', node.stateReference || '');
+
+    let updateConfigureBtn = function() {
+        configureBtn.toggleClass("disabled", !typeSelector.val());
+    };
+
+    let getStateProviderTypes = async function() {
+        let types = [];
+        await $.ajax({
+            url: "nodetypeservice/find?tag=StateProvider",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            success:  (r)              => { types = r; },
+            error:    (jqXHR, s, err) => { console.log("StateTemplate: provider types error", jqXHR, s, err); },
+        });
+        return types;
+    };
+
+    // RED.editor.editConfig captures a reference to the field element before the inner config
+    // editor opens. When editing a ConfigNode, the outer editor's DOM is swapped out while the
+    // inner editor is active, so the captured reference becomes stale and editConfig's own
+    // callback silently fails to update our hidden select.
+    //
+    // Instead we listen for the 'nodes:add' event which fires via RED.nodes.add() whenever a
+    // new node (including config nodes) is added to the workspace — regardless of DOM state.
+    let stateNodeAddHandler = function(addedNode) {
+        getStateProviderTypes().then(function(types) {
+            let typeIds = types.map(function(t) { return t.id; });
+            if (typeIds.indexOf(addedNode.type) < 0) { return; }
+
+            console.log("StateTemplate: nodes:add — state provider added:", addedNode.type, addedNode.id);
+
+            let prevRef     = stateRefSelector.val() || '';
+            let originalRef = stateRefSelector.data('originalRef') || '';
+
+            // Clean up any intermediate node created earlier this session (not the original).
+            if (prevRef && prevRef !== originalRef) {
+                let inter = RED.nodes.node(prevRef);
+                if (inter) { RED.nodes.remove(inter); RED.nodes.dirty(true); }
+            }
+
+            // Update the hidden select with the newly created node.
+            stateRefSelector.empty();
+            stateRefSelector.append($('<option>').val(addedNode.id).text(addedNode.name || addedNode.id));
+            stateRefSelector.val(addedNode.id);
+
+            // Sync the visible type selector.
+            typeSelector.val(addedNode.type);
+            updateConfigureBtn();
+        });
+    };
+
+    RED.events.on('nodes:add', stateNodeAddHandler);
+    stateSection.data('stateNodeAddHandler', stateNodeAddHandler);
+
+    // When the type dropdown changes, restore the original ref if it matches,
+    // or clear so the user must click Configure to create a new instance.
+    typeSelector.on('change', function() {
+        let selectedType = typeSelector.val() || '';
+        let originalRef  = stateRefSelector.data('originalRef') || '';
+        let currentRef   = stateRefSelector.val() || '';
+
+        if (!selectedType) {
+            stateRefSelector.val('');
+            updateConfigureBtn();
+            return;
+        }
+        if (originalRef) {
+            let originalNode = RED.nodes.node(originalRef);
+            if (originalNode && originalNode.type === selectedType) {
+                stateRefSelector.val(originalRef);
+                updateConfigureBtn();
+                return;
+            }
+        }
+        if (currentRef) {
+            let currentNode = RED.nodes.node(currentRef);
+            if (currentNode && currentNode.type === selectedType) {
+                updateConfigureBtn();
+                return;
+            }
+        }
+        stateRefSelector.val('');
+        updateConfigureBtn();
+    });
+
+    configureBtn.on('click', function(event) {
+        event.stopPropagation();
+        if (configureBtn.hasClass("disabled")) return;
+
+        let selectedType = typeSelector.val() || '';
+        if (!selectedType) return;
+
+        let currentRef  = stateRefSelector.val() || '';
+        let currentNode = currentRef ? RED.nodes.node(currentRef) : null;
+
+        // Always set __stateTemplateContext so the config node editor can read defaultName and states.
+        window.__stateTemplateContext = {
+            defaultName: (node.name || node.type) + _stateNameSuffix,
+            states: _stateStates
+        };
+
+        if (currentNode && currentNode.type === selectedType) {
+            // Editing an existing owned node — nodes:add won't fire, select already has the value.
+            RED.editor.editConfig("#state-ref-selector", selectedType, currentRef);
+        } else {
+            // Creating a new instance — nodes:add handler will capture the new ID.
+            RED.editor.editConfig("#state-ref-selector", selectedType, "_ADD_");
+        }
+    });
+
+    // Populate the type dropdown, pre-select the current type, or auto-create a default.
+    getStateProviderTypes().then(function(providerTypes) {
+        providerTypes.forEach(function(t) {
+            $('<option>').val(t.id).text(t.name).appendTo(typeSelector);
+        });
+
+        let currentRef = stateRefSelector.val();
+        if (currentRef) {
+            // Existing reference — just pre-select its type.
+            let currentNode = RED.nodes.node(currentRef);
+            if (currentNode) typeSelector.val(currentNode.type);
+            updateConfigureBtn();
+        } else if (providerTypes.length > 0) {
+            // No state reference — auto-create a default InternalStateConfigNode so the
+            // consumer always has a valid state provider without requiring user action.
+            let defaultType = providerTypes.find(function(t) { return t.id === "InternalStateConfigNode"; }) || providerTypes[0];
+            let nodeDef     = RED.nodes.getType(defaultType.id);
+            if (nodeDef) {
+                // _def and _users MUST be set explicitly when creating a node programmatically:
+                // - _def:   RED.nodes.add() triggers updateConfigNodeUsers() which accesses
+                //           n._def.defaults. Without it: "can't access property '_', e._def is undefined".
+                // - _users: When the outer config node is saved, Node-RED updates the referenced
+                //           config node's user list. Without it: "can't access property 'indexOf',
+                //           t.users is undefined".
+                let newNode = { id: RED.nodes.id(), type: defaultType.id, _def: nodeDef, _users: [], users: [] };
+                let defs = nodeDef.defaults || {};
+                for (let key in defs) {
+                    if (defs[key].value !== undefined) { newNode[key] = defs[key].value; }
+                }
+                newNode.name = (node.name || node.type) + _stateNameSuffix;
+                // Pre-select the type immediately; nodes:add handler will set the ref ID.
+                typeSelector.val(defaultType.id);
+                updateConfigureBtn();
+                RED.nodes.add(newNode);
+            }
+        }
+    });
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+    var _stateSection        = $("#state-config-section");
+    var _stateNodeAddHandler = _stateSection.data('stateNodeAddHandler');
+    if (_stateNodeAddHandler) {
+        RED.events.off('nodes:add', _stateNodeAddHandler);
+        _stateSection.data('stateNodeAddHandler', null);
+    }
+    var _stateRefSelector = _stateSection.find("#state-ref-selector");
+    node.stateReference   = _stateRefSelector.val() || '';
+    console.log("StateTemplate: save — stateReference:", node.stateReference);
+    var _stateOriginalRef = _stateRefSelector.data('originalRef') || '';
+    if (_stateOriginalRef && _stateOriginalRef !== node.stateReference) {
+        var _stateOldNode = RED.nodes.node(_stateOriginalRef);
+        if (_stateOldNode) {
+            RED.nodes.remove(_stateOldNode);
+            RED.nodes.dirty(true);
+        }
+    }
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditCancel">
+    var _stateSection        = $("#state-config-section");
+    var _stateNodeAddHandler = _stateSection.data('stateNodeAddHandler');
+    if (_stateNodeAddHandler) {
+        RED.events.off('nodes:add', _stateNodeAddHandler);
+        _stateSection.data('stateNodeAddHandler', null);
+    }
+    var _stateRefSelector = _stateSection.find("#state-ref-selector");
+    var _stateCurrentRef  = _stateRefSelector.val() || '';
+    var _stateOriginalRef = _stateRefSelector.data('originalRef') || '';
+    if (_stateCurrentRef && _stateCurrentRef !== _stateOriginalRef) {
+        var _stateTempNode = RED.nodes.node(_stateCurrentRef);
+        if (_stateTempNode) {
+            RED.nodes.remove(_stateTempNode);
+            RED.nodes.dirty(true);
+        }
+    }
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div id="state-config-section">
+        <div class="form-row editorsectionheading">
+            <i class="w-16 fa fa-exchange"></i> <span>State</span>
+        </div>
+        <div class="editorgroupborder">
+            <div class="form-row nomargin">
+                <label class="towb_editorlabel" for="state-type-selector">Provider</label>
+                <div style="width: 70%; display: inline-flex;">
+                    <select id="state-type-selector" style="flex-grow: 1; min-width: 0;">
+                    </select>
+                    <a id="state-configure-btn" class="red-ui-button disabled" style="margin-left: 10px; flex-shrink: 0;" title="Configure state provider">
+                        <i class="fa fa-pencil"></i>
+                    </a>
+                </div>
+            </div>
+            <!-- Hidden real select — populated by nodes:add handler when a new state provider is created. -->
+            <select id="state-ref-selector" style="display:none;"></select>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### State
+
+: *provider* (stateconfig) : Selects the type of state backend for this node. Click the pencil icon to create or configure the provider instance.
+
+Available built-in provider: **Internal State Config Node** — stores state in memory with optional persistence across redeployments and restarts.
+
+Each node owns its state provider exclusively. Switching provider types during configuration will delete the old provider instance when the editor is saved.
+</script>

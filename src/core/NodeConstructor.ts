@@ -507,6 +507,7 @@ export class NodeBuilder {
 
     public addTemplate(template: { template: ITemplateClass; config: TemplateConfig; }): NodeBuilder {
         let templateDescriptor = template.template.getTemplateDescriptor();
+        let templateConfig = template.config;
 
         // load the html source file
         let uiDom = new (getJSDOM())(fs.readFileSync(templateDescriptor.templateFile()!));
@@ -521,7 +522,16 @@ export class NodeBuilder {
         let sections:string[] = ['IncludeOnce', 'IncludeEditPrepare', 'IncludeEditSave', 'IncludeEditCancel', 'IncludeEditDelete', 'IncludeEditForm', 'IncludeDocumentation'];
         Object.values(sections).forEach(section => {
             let sectionData = uiDom.window.document.querySelector(`[template-section='on${section}']`)?.innerHTML;
+
             if(sectionData){
+                if(section !== "IncludeOnce" && section !== "IncludeEditForm" && section !== "IncludeDocumentation") {
+                    // add the packageing around the sectionData
+                    sectionData = `{
+                        let node = this;
+                        let templateConfig = ${JSON.stringify(templateConfig)};
+                        ${sectionData}
+                    }`;
+                }
                 (this as any)[`add${section}`](templateDescriptor.name(), sectionData);
             }
         });
