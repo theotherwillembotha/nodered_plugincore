@@ -1,7 +1,7 @@
 
 import { DelegatedConfigReferenceNode } from "./core/other/node/DelegatedConfigReferenceNode.js";
 import { NodeTypeService } from "./core/tagging/service/NodeTypeService.js";
-import { NodeGenerator, SettingsService, BasicTemplate, SettingsTemplate, TimerMetricTemplate, ConsoleLoggerConfigNode, RestLoggerConfigNode, UIHelperTemplate, ScriptEditorTemplate } from "./index.js"
+import { NodeGenerator, SettingsService, BasicTemplate, SettingsTemplate, TimerMetricTemplate, UIHelperTemplate, ScriptEditorTemplate } from "./index.js"
 import { WebhookServerConfigNode, WebhookServerService, WebhookTemplate,  } from "./index.js"
 
 import {LoggerService, LoggerTemplate } from "./index.js";
@@ -33,9 +33,6 @@ new NodeGenerator("./src/core/")
 
     // nodes
     .registerNode(DelegatedConfigReferenceNode)
-    .registerNode(ConsoleLoggerConfigNode)
-    .registerNode(RestLoggerConfigNode)
-
     .registerNode(WebhookServerConfigNode)
     .registerNode(InternalStateConfigNode)
 

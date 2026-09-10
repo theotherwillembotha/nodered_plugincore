@@ -113,6 +113,8 @@
     let logTemplateEnabled = $("#{{defaults.logTemplateOverrideEnabled}}");
     let logTemplateEnabledSection = $("#section_logTemplateOverrideEnabled");
     let logEnabledSection = $("#section_logEnabled");
+    let loggerSection = $("#section_loggerconfig");
+    loggerSection.hide();
 
     // functions.
     let getLoggerTypes = async function(){
@@ -260,10 +262,15 @@
         }
     });
     
-    // lastly, make sure that we set the correct value on the logger selector.
-    updateLoggerSelectorList().then(() => {
-        loggerSelector.val(node.logger);
-        loggerSelector.trigger('change');
+    // Show the logger section only if at least one logger type is registered.
+    // If nodered_logging (or any other logger provider) is not installed, the section stays hidden.
+    getLoggerTypes().then(loggerTypes => {
+        if (loggerTypes.length === 0) return;
+        loggerSection.show();
+        updateLoggerSelectorList().then(() => {
+            loggerSelector.val(node.logger);
+            loggerSelector.trigger('change');
+        });
     });
 
 </script>

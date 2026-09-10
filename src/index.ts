@@ -4,8 +4,6 @@ export * from "./core/NodeConstructor";
 
 // LOGGER
 export * from "./core/logger/service/LoggerService";
-export * from "./core/logger/node/ConsoleLoggerConfigNode";
-export * from "./core/logger/node/RestLoggerConfigNode";
 export * from "./core/logger/template/LoggerTemplate";
 
 

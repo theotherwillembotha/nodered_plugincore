@@ -6,8 +6,10 @@
 
 <script type="text/javascript" template-section="onIncludeEditPrepare">
     let metricsEnabled = $("#{{defaults.metricsEnabled}}");
+    let metricsSection = $("#section_metricsconfig");
     let metricsContainer = metricsEnabled.closest(".editorgroupborder");
     let metricsEnabledSection = metricsContainer.find("#section_metricsEnabled");
+    metricsSection.hide();
 
     let getMetricsProviderTypes = async function() {
         let types = [];
@@ -115,9 +117,15 @@
         }
     });
 
-    updateMetricsSelectorList().then(() => {
-        metricsSelector.val(node.metricsReference);
-        metricsSelector.trigger('change');
+    // Show the metrics section only if at least one metrics provider type is registered.
+    // If nodered_prometheus (or any other provider) is not installed, the section stays hidden.
+    getMetricsProviderTypes().then(providerTypes => {
+        if (providerTypes.length === 0) return;
+        metricsSection.show();
+        updateMetricsSelectorList().then(() => {
+            metricsSelector.val(node.metricsReference);
+            metricsSelector.trigger('change');
+        });
     });
 </script>
 
