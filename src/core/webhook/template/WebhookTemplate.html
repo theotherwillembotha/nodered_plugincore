@@ -131,12 +131,6 @@ node
         return types;
     }
 
-    getProxyTypes().then(types => {
-        if(types.length === 0){
-            $("#section_reverseproxy_feature").hide();
-        }
-    });
-
     let getProxies = async () => {
         let proxies = [];
 
@@ -161,8 +155,8 @@ node
         scrollOnAdd: true,
         addButton: 'Add ProxyHost',
         header: $('<div>').append($.parseHTML(`
-            <div style='width:30%; margin-left:5%; display:inline-grid;'>Proxy</div>
-            <div style='width:auto; margin-right:5%; display:inline-grid;'>Domain Name</div>
+            <div style='width:30%; margin-left:5%; display:inline-block;'>Proxy</div>
+            <div style='width:auto; margin-right:5%; display:inline-block;'>Domain Name</div>
             `)
         ),
         buttons: [
@@ -263,15 +257,14 @@ node
 
         addItem: async function(container, i, proxy){
             let row =  $('<div/>', {
-                class: 'form-row',
-                style: 'display: flex; margin-bottom: 0;'
+                style: 'display: flex; align-items: center; width: 100%; margin-bottom: 2px; box-sizing: border-box;'
             }).appendTo(container);
 
             let proxyColumn = $('<select/>', {
                 type: 'text',
                 name: i,
                 required: true,
-                style: 'margin-left: 5px; margin-bottom: 0;',
+                style: 'flex: 1; min-width: 0; margin-left: 5px; margin-bottom: 0;',
                 class: 'proxy-proxy'
             }).appendTo(row);
 
@@ -293,7 +286,7 @@ node
                 type: 'text',
                 name: i,
                 required: true,
-                style: 'margin-left: 5px; margin-bottom: 0;',
+                style: 'flex: 1; min-width: 0; margin-left: 5px; margin-bottom: 0;',
                 class: 'proxy-domainname'
             }).appendTo(row)
             domainnameColumn.val(proxy.domainname);
@@ -308,8 +301,15 @@ node
         $('.proxy-dropdown').remove();
     });
 
-    this.reverseProxies_connections = (this.reverseProxies_connections) ? this.reverseProxies_connections : [];
-    reverseProxyList.editableList('addItems', this.reverseProxies_connections);
+    // Show the reverse proxy section only if at least one provider type is registered.
+    // The editableList is initialised above (while the section is still hidden) so that
+    // its wide toolbar buttons never participate in the tray's initial layout calculation.
+    getProxyTypes().then(types => {
+        if(types.length === 0) return;
+        $("#section_reverseproxy_feature").show();
+        let savedConnections = this.reverseProxies_connections || [];
+        reverseProxyList.editableList('addItems', savedConnections);
+    });
 
 </script>
 
@@ -334,7 +334,7 @@ node
         </div>
         
         <div class="editorgroupborder">
-            <div class="form-row nomargin">
+            <div class="form-row">
                 <label class="towb_editorlabel" for="{{defaults.webhook}}"><i class="fa fa-server"></i> Server</label>
                 <input id="{{defaults.webhook}}" placeholder="webhook" />
             </div>
@@ -381,7 +381,7 @@ node
                 </div>
             </div>
 
-            <div id="section_reverseproxy_feature">
+            <div id="section_reverseproxy_feature" style="display:none">
                 <div class="form-row">
                     <label>Reverse Proxy</label>
                     <input type="checkbox" id="{{defaults.reverseProxies_enabled}}" style="width:20px; margin-right:5px;" />
@@ -420,10 +420,10 @@ Validates the `Authorization` header on each incoming request against a username
 : *password* (string) : the password expected in the `Authorization` header
 
 - API Key:
-Validates a key/value pair carried in the request. Only the `Header` mechanism is currently supported — the key is read from a named request header and compared against the configured value. Requests that do not supply the correct key receive a `401` response.
+Validates a key/value pair carried in the request. Only the `Header` mechanism is currently supported - the key is read from a named request header and compared against the configured value. Requests that do not supply the correct key receive a `401` response.
 : *mechanism* (mechanism) : the transport mechanism for the key. Currently supported: `Header`
 : *key name*  (string)    : the name of the request header carrying the key (e.g. `x-api-key`)
-: *key value* (string)    : the expected value — requests not matching this value are rejected
+: *key value* (string)    : the expected value - requests not matching this value are rejected
 
 ### Reverse Proxy
 When *enable reverse proxy* is checked, the webhook endpoint is registered with one or more reverse proxy services installed in Node-RED. Reverse proxy types are discovered automatically from any plugin that registers a service tagged `ReverseProxyType` (e.g. an Nginx Proxy Manager integration). Each row in the list maps the internal webhook server to a public-facing domain.

@@ -377,7 +377,7 @@ export abstract class BaseService {
     }
 }
 
-// Build-time deps — lazy loaded so they are never required at runtime in production bundles.
+// Build-time deps - lazy loaded so they are never required at runtime in production bundles.
 // These are only invoked during `npm run build` (GenerateNodes), never in the deployed container.
 function getJSDOM(): any { return require('jsdom').JSDOM; }
 function getBeautify(): any { return require('js-beautify'); }
@@ -457,7 +457,7 @@ export class NodeBuilder {
     }
 
     public addDefault(name:string, template:DefaultTemplateType):NodeBuilder{
-        // if list:true, this is an array of config references — generate shadow defaults for each slot.
+        // if list:true, this is an array of config references - generate shadow defaults for each slot.
         if(template.list === true) {
             template.maxInstances =  template.maxInstances ? template.maxInstances : 10;
             this._defaults[name] = {value:"", required:(template.required) ? template.required : false, maxInstances:template.maxInstances};

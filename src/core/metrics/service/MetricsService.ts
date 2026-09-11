@@ -193,7 +193,7 @@ export abstract class MetricsContainer {
     public abstract hasChanged(config: MetricsConfig): boolean;
     public abstract close(): void;
 
-    // Default implementations warn and return DoNothing — providers override what they support.
+    // Default implementations warn and return DoNothing - providers override what they support.
     public counter(_config: CounterMetricConfig): CounterMetric {
         console.warn(`[PluginCore] MetricsContainer: Counter is not supported by this provider.`);
         return new DoNothingCounterMetric();
@@ -212,7 +212,7 @@ export abstract class MetricsContainer {
     }
 }
 
-// Silent DoNothing — returned when no provider is installed. Does not warn since this is expected.
+// Silent DoNothing - returned when no provider is installed. Does not warn since this is expected.
 export class DoNothingMetricsContainer extends MetricsContainer {
     public supports(_capability: MetricCapability): boolean { return false; }
     public hasChanged(_config: MetricsConfig): boolean { return false; }

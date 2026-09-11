@@ -31,7 +31,7 @@ class InternalStateHandle implements StateHandle {
                 StateService.setMemory(this._nodeId, fileValue);
             }
         }
-        // Default state seeding is the consumer node's responsibility — call set() after get() returns null.
+        // Default state seeding is the consumer node's responsibility - call set() after get() returns null.
     }
 
     private _read(): string | null {

@@ -4,7 +4,7 @@ import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
 import { NodeAPI, NodeAPISettingsWithData, Node } from "node-red";
 import { LoggerTemplate, LoggerTemplateConfig } from "../template/LoggerTemplate";
 
-// Build-time / optional runtime deps — lazy so they are never required at bundle load time.
+// Build-time / optional runtime deps - lazy so they are never required at bundle load time.
 function getHandlebars(): any { return require('handlebars'); }
 function getNetwork(): any { return require('network'); }
 

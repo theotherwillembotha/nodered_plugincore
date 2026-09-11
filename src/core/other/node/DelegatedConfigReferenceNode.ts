@@ -1,6 +1,6 @@
 
 /**
- * DelegatedConfigReferenceNode — a framework-internal sentinel type.
+ * DelegatedConfigReferenceNode - a framework-internal sentinel type.
  *
  * PROBLEM
  * Node-RED's reference counter (the usage count shown on config nodes in the

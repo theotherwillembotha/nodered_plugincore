@@ -9,7 +9,7 @@ import { MetricsContainer, MetricsService, MetricsConfig } from "../service/Metr
  * decorate with @NodeDescription + tags: ["MetricsProvider"], and implement
  * createContainer() to return their backend-specific MetricsContainer.
  *
- * This class is intentionally NOT decorated with @NodeDescription — it is never
+ * This class is intentionally NOT decorated with @NodeDescription - it is never
  * registered as a Node-RED node type directly. Only concrete subclasses are registered.
  */
 export abstract class MetricsConfigNode extends ConfigNode<ConfigNodeConfig> {

@@ -46,13 +46,13 @@
     // callback silently fails to update our hidden select.
     //
     // Instead we listen for the 'nodes:add' event which fires via RED.nodes.add() whenever a
-    // new node (including config nodes) is added to the workspace — regardless of DOM state.
+    // new node (including config nodes) is added to the workspace - regardless of DOM state.
     let stateNodeAddHandler = function(addedNode) {
         getStateProviderTypes().then(function(types) {
             let typeIds = types.map(function(t) { return t.id; });
             if (typeIds.indexOf(addedNode.type) < 0) { return; }
 
-            console.log("StateTemplate: nodes:add — state provider added:", addedNode.type, addedNode.id);
+            console.log("StateTemplate: nodes:add - state provider added:", addedNode.type, addedNode.id);
 
             let prevRef     = stateRefSelector.val() || '';
             let originalRef = stateRefSelector.data('originalRef') || '';
@@ -125,10 +125,10 @@
         };
 
         if (currentNode && currentNode.type === selectedType) {
-            // Editing an existing owned node — nodes:add won't fire, select already has the value.
+            // Editing an existing owned node - nodes:add won't fire, select already has the value.
             RED.editor.editConfig("#state-ref-selector", selectedType, currentRef);
         } else {
-            // Creating a new instance — nodes:add handler will capture the new ID.
+            // Creating a new instance - nodes:add handler will capture the new ID.
             RED.editor.editConfig("#state-ref-selector", selectedType, "_ADD_");
         }
     });
@@ -141,12 +141,12 @@
 
         let currentRef = stateRefSelector.val();
         if (currentRef) {
-            // Existing reference — just pre-select its type.
+            // Existing reference - just pre-select its type.
             let currentNode = RED.nodes.node(currentRef);
             if (currentNode) typeSelector.val(currentNode.type);
             updateConfigureBtn();
         } else if (providerTypes.length > 0) {
-            // No state reference — auto-create a default InternalStateConfigNode so the
+            // No state reference - auto-create a default InternalStateConfigNode so the
             // consumer always has a valid state provider without requiring user action.
             let defaultType = providerTypes.find(function(t) { return t.id === "InternalStateConfigNode"; }) || providerTypes[0];
             let nodeDef     = RED.nodes.getType(defaultType.id);
@@ -181,7 +181,7 @@
     }
     var _stateRefSelector = _stateSection.find("#state-ref-selector");
     node.stateReference   = _stateRefSelector.val() || '';
-    console.log("StateTemplate: save — stateReference:", node.stateReference);
+    console.log("StateTemplate: save - stateReference:", node.stateReference);
     var _stateOriginalRef = _stateRefSelector.data('originalRef') || '';
     if (_stateOriginalRef && _stateOriginalRef !== node.stateReference) {
         var _stateOldNode = RED.nodes.node(_stateOriginalRef);
@@ -227,7 +227,7 @@
                     </a>
                 </div>
             </div>
-            <!-- Hidden real select — populated by nodes:add handler when a new state provider is created. -->
+            <!-- Hidden real select - populated by nodes:add handler when a new state provider is created. -->
             <select id="state-ref-selector" style="display:none;"></select>
         </div>
     </div>
@@ -238,7 +238,7 @@
 
 : *provider* (stateconfig) : Selects the type of state backend for this node. Click the pencil icon to create or configure the provider instance.
 
-Available built-in provider: **Internal State Config Node** — stores state in memory with optional persistence across redeployments and restarts.
+Available built-in provider: **Internal State Config Node** - stores state in memory with optional persistence across redeployments and restarts.
 
 Each node owns its state provider exclusively. Switching provider types during configuration will delete the old provider instance when the editor is saved.
 </script>

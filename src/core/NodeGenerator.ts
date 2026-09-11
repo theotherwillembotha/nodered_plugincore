@@ -158,10 +158,10 @@ ${moduleExports}
 
         let runtimeSrcPath: string;
         try {
-            // Resolves when this is a consumer plugin — plugincore is in node_modules.
+            // Resolves when this is a consumer plugin - plugincore is in node_modules.
             runtimeSrcPath = require.resolve('@theotherwillembotha/node-red-plugincore/build/runtime/NodeManagerRuntime');
         } catch {
-            // We ARE plugincore — NodeManagerRuntime.js is compiled alongside us in build/core/.
+            // We ARE plugincore - NodeManagerRuntime.js is compiled alongside us in build/core/.
             runtimeSrcPath = path.join(__dirname, 'NodeManagerRuntime.js');
         }
 

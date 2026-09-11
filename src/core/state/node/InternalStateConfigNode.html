@@ -43,7 +43,7 @@
         </span>
     </div>
 
-    <!-- Name is stored but not shown — auto-set from the consumer node's name + suffix. -->
+    <!-- Name is stored but not shown - auto-set from the consumer node's name + suffix. -->
     <input type="hidden" id="node-config-input-name" />
 
     <div class="form-row editorsectionheading" style="margin-top:8px;">
@@ -71,7 +71,7 @@ Stores a named state value in memory, optionally persisted across redeployments 
 
 ### Details
 
-The initial (default) state value is provided by the node that owns this config — for example, a Circuit Breaker Config Node sets the state to its configured **Default State** if no value has been stored yet.
+The initial (default) state value is provided by the node that owns this config - for example, a Circuit Breaker Config Node sets the state to its configured **Default State** if no value has been stored yet.
 
 When **Survives Restart** is enabled, state is persisted to `<userDir>/internalstate/<nodeId>.json` and automatically restored on the next startup.
 </script>

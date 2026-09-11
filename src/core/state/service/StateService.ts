@@ -22,7 +22,7 @@ export class DoNothingStateHandle implements StateHandle {
     public unsubscribe(): void {}
 }
 
-// (StateReference removed — stateEnabled is no longer optional; consumers pass the ID directly)
+// (StateReference removed - stateEnabled is no longer optional; consumers pass the ID directly)
 
 // ******************************************************* //
 //                   Global Store Keys                     //

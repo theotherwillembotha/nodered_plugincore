@@ -9,7 +9,7 @@ import { StateHandle, StateService } from "../service/StateService";
  * class, decorate with @NodeDescription + tags: ["StateProvider"], and implement createHandle()
  * to return their backend-specific StateHandle.
  *
- * This class is intentionally NOT decorated with @NodeDescription — it is never registered as a
+ * This class is intentionally NOT decorated with @NodeDescription - it is never registered as a
  * Node-RED node type directly. Only concrete subclasses are registered.
  */
 export abstract class StateConfigNode extends ConfigNode<ConfigNodeConfig> {

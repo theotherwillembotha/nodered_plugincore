@@ -1,7 +1,7 @@
 /**
  * NodeManagerRuntime.ts
  *
- * STANDALONE — zero imports from the rest of plugincore.
+ * STANDALONE - zero imports from the rest of plugincore.
  *
  * This file is compiled and copied into every plugin's build output so that
  * plugins are self-contained and do not require plugincore to be separately
@@ -20,7 +20,7 @@
 import type { NodeAPI, NodeAPISettingsWithData } from "node-red";
 
 // ─── API version ────────────────────────────────────────────────────────────
-// Semver of the NodeManager API contract — independent of plugincore's package
+// Semver of the NodeManager API contract - independent of plugincore's package
 // version. Bump when the contract changes; plugins can read this to warn users
 // that they were built against a different NodeManager version.
 export const NODEMANAGER_API_VERSION = "1.0.0";
@@ -97,7 +97,7 @@ function getRegisteredNodes(): Set<string> {
 
 export class NodeManager {
 
-    // nodeTypeService is resolved dynamically via RED.plugins — no static import needed.
+    // nodeTypeService is resolved dynamically via RED.plugins - no static import needed.
     private nodeTypeService: any;
     private typeBacklog: INodeClass[] = [];
 
@@ -141,7 +141,7 @@ export class NodeManager {
 
         const registeredNodes = getRegisteredNodes();
         if (registeredNodes.has(typeName)) {
-            // Already registered by another plugin — skip to avoid Node-RED duplicate-registration error.
+            // Already registered by another plugin - skip to avoid Node-RED duplicate-registration error.
             return this;
         }
         registeredNodes.add(typeName);
