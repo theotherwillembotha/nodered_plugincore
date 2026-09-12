@@ -1,2 +1,14 @@
 node_modules/**
 package-lock.json
+.npmignore
+.npmrc.example
+.npmrc
+CLAUDE.md
+.claude/**
+memory/**
+volumes/**
+nodered-compose.yaml
+UPGRADE-0.3.0.md
+PluginStarterGuide.md
+core.md
+tsconfig.json

@@ -1,15 +1,12 @@
 import { SourceUtility } from "../../NodeGenerator";
-import { Template,  TemplateDescriptor } from "../../NodeConstructor"
+import { Template } from "../../NodeConstructor"
+import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
 import { CounterMetricConfigNode } from "../node/CounterMetricConfigNode";
 
+@TemplateDescription({
+    name: "countermetric",
+    templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "CounterMetricTemplate.html",
+    dependencies: [CounterMetricConfigNode],
+})
 export class CounterMetricTemplate extends Template {
-
-    
-    public static getTemplateDescriptor(): TemplateDescriptor {
-        return new TemplateDescriptor(
-            "countermetric", 
-            CounterMetricTemplate, 
-            SourceUtility.getSourcePath("/build/", "/src/") + "CounterMetricTemplate.html",
-            [CounterMetricConfigNode]);
-    }
 }

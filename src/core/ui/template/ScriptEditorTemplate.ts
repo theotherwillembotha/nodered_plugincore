@@ -1,14 +1,10 @@
-import { Template, TemplateDescriptor } from "../../NodeConstructor"
+import { Template } from "../../NodeConstructor"
 import { SourceUtility } from "../../NodeGenerator";
+import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
 
+@TemplateDescription({
+    name: "script-editor",
+    templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "ScriptEditorTemplate.html",
+})
 export class ScriptEditorTemplate extends Template {
-
-    public static getTemplateDescriptor(): TemplateDescriptor {
-        return new TemplateDescriptor(
-            "script-editor",
-            ScriptEditorTemplate,
-            SourceUtility.getSourcePath("/build/", "/src/") + "ScriptEditorTemplate.html",
-            []
-        );
-    }
 }

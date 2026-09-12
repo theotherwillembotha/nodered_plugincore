@@ -28,6 +28,7 @@ export * from "./core/state/template/StateTemplate";
 export * from "./core/tagging/service/NodeTypeService";
 export * from "./core/tagging/NodeDescriptionDecorator";
 export * from "./core/tagging/ServiceDescriptionDecorator";
+export * from "./core/tagging/TemplateDescriptionDecorator";
 
 // UI
 export * from "./core/ui/template/UIHelperTemplate";

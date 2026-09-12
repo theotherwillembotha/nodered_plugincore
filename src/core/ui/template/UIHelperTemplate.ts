@@ -1,14 +1,10 @@
-import { Template, TemplateDescriptor } from "../../NodeConstructor"
+import { Template } from "../../NodeConstructor"
 import { SourceUtility } from "../../NodeGenerator";
+import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
 
+@TemplateDescription({
+    name: "ui-helper",
+    templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "UIHelperTemplate.html",
+})
 export class UIHelperTemplate extends Template {
-
-    public static getTemplateDescriptor(): TemplateDescriptor {
-        return new TemplateDescriptor(
-            "ui-helper",
-            UIHelperTemplate,
-            SourceUtility.getSourcePath("/build/", "/src/") + "UIHelperTemplate.html",
-            []
-        );
-    }
 }

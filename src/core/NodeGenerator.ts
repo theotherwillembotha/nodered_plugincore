@@ -58,12 +58,10 @@ class NodeGenerator {
 
     public registerTemplate(template: ITemplateClass): NodeGenerator {
         try{
-            // verify that we dont already have this template.
             let descriptor = template.getTemplateDescriptor();
             if(!this._templates.map(t => t.name()).includes(descriptor.name())){
                 this._templates.push(descriptor);
-                // FIXME: skip recursive dependency resolution for now.
-                // descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
+                descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
             }
         }
         catch(error){
@@ -75,14 +73,14 @@ class NodeGenerator {
 
     public registerNode(node:INodeClass):NodeGenerator{
         try{
-            // verify that we have dont already have this node.
             let descriptor = node.getNodeDescriptor();
             if(!this._nodes[descriptor.id()]){
                 this._nodes[descriptor.id()] = {nodeClass:node, descriptor:descriptor};
-                // skip the recursive dependencies for now.
-                //descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
+                // resolve templates declared in @NodeDescription
+                descriptor.templates().forEach(t => this.registerTemplate(t.template));
+                // resolve explicit dependencies (services, nodes, templates)
+                descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
             }
-
         }
         catch(error){
             console.log("ERROR:", error);
@@ -90,13 +88,12 @@ class NodeGenerator {
         return this;
     }
 
-    public registerService(service: IServiceClass):NodeGenerator { 
+    public registerService(service: IServiceClass):NodeGenerator {
         try{
             let descriptor = service.getServiceDescriptor();
             if(!this._services.map(s => s.name()).includes(descriptor.name())){
                 this._services.push(descriptor);
-                // FIXME: skip recursive dependency resolution for now.
-                //descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
+                descriptor.dependencies().forEach(dependency => this.addDependency(dependency));
             }
         }
         catch(error){
@@ -105,19 +102,22 @@ class NodeGenerator {
         return this;
     }
 
-    public generate(nodesOutputFile:string, pluginsOutputFile:string){
-        // STEP 1. Write an empty Nodes.html.
-        // Client-side node type definitions live in Plugins.html (generated below)
-        // to prevent HTML-scanning conflicts when multiple plugins bundle the same
-        // plugincore infrastructure nodes.
-        fs.writeFileSync(nodesOutputFile + ".html", `
-<!--
-${NodeGenerator.warning}
-Client-side node type definitions have been moved to Plugins.html to prevent
-duplicate type registration conflicts when multiple plugins share the same
-plugincore infrastructure nodes.
--->
-        `);
+    public generate(nodesOutputFile:string, pluginsOutputFile:string, packageName:string){
+        // Partition nodes into owned (belongs to this package) vs shared (from dependencies).
+        // Owned nodes get standard registerType + data-template-name in Nodes.html so that
+        // Node-RED's registry maps them to this module (enabling palette icons, flow library
+        // detection, etc.). Shared nodes keep the deferred pattern in Plugins.html to avoid
+        // HTML-scanning conflicts when multiple plugins bundle the same infrastructure nodes.
+        const allNodes = Object.values(this._nodes);
+        const ownedNodes = allNodes.filter(node => node.descriptor.package() === packageName);
+        const sharedNodes = allNodes.filter(node => node.descriptor.package() !== packageName);
+
+        console.log(`\nPackage: ${packageName}`);
+        console.log(`  Owned nodes (→ Nodes.html):   ${ownedNodes.map(n => n.descriptor.id()).join(', ') || '(none)'}`);
+        console.log(`  Shared nodes (→ Plugins.html): ${sharedNodes.map(n => n.descriptor.id()).join(', ') || '(none)'}\n`);
+
+        // STEP 1. Generate Nodes.html with standard client-side definitions for owned nodes.
+        this.generateNodesHtml(nodesOutputFile + ".html", ownedNodes);
 
         // Step 3. compose the JS structure for each of the nodes.
         // 1. get a list of the files to import.
@@ -258,17 +258,71 @@ module.exports = function (RED) {
         fs.writeFileSync(pluginsOutputFile + ".js", output);
         console.log(`Done building ${this._services.length} services\n${this._services.map(service => " - " + service.name() + "\n").join("")}\n`);
 
-        // STEP 4. Generate Plugins.html with deferred client-side node definitions.
-        // All nodes are registered via registry:node-set-added so that:
-        //   a) registerType is only called after typeToId/nodeSets are populated, and
-        //   b) data-template-name declarations are absent from Nodes.html, avoiding
-        //      the HTML-scanning conflict that causes Node-RED to reject an entire
-        //      plugin when a second package declares the same node type.
+        // STEP 4. Generate Plugins.html with deferred client-side definitions for shared nodes.
+        this.generatePluginsHtml(pluginsOutputFile + ".html", sharedNodes);
+    }
+
+    private generateNodesHtml(filePath: string, nodes: {nodeClass: INodeClass, descriptor: NodeDescriptor}[]): void {
+        if (nodes.length === 0) {
+            fs.writeFileSync(filePath, `
+<!--
+${NodeGenerator.warning}
+No owned nodes in this package. Shared nodes are registered via Plugins.html.
+-->
+            `);
+            console.log(`Nodes.html: no owned nodes\n`);
+            return;
+        }
+
+        const seenOnce = new Set<string>();
+        const onceHtmlParts: string[] = [];
+        const nodeParts: string[] = [];
+
+        nodes.forEach(node => {
+            console.log(`Building Nodes.html for: ${node.descriptor.id()}`);
+            const nb = buildNodeBuilder(node.nodeClass);
+
+            nb.buildOnceHtml().forEach(({source, html}) => {
+                if (!seenOnce.has(source)) {
+                    seenOnce.add(source);
+                    onceHtmlParts.push(html);
+                }
+            });
+
+            nodeParts.push([
+                nb.buildStandardType(),
+                nb.buildHtml(),
+                nb.buildDocumentation()
+            ].join('\n\n'));
+        });
+
+        fs.writeFileSync(filePath, `
+<!--
+${NodeGenerator.warning}
+-->
+${onceHtmlParts.join('\n')}
+${nodeParts.join('\n\n')}
+        `);
+        console.log(`Done building Nodes.html (${nodes.length} owned nodes)\n`);
+    }
+
+    private generatePluginsHtml(filePath: string, nodes: {nodeClass: INodeClass, descriptor: NodeDescriptor}[]): void {
+        if (nodes.length === 0) {
+            fs.writeFileSync(filePath, `
+<!--
+${NodeGenerator.warning}
+No shared nodes in this package. All nodes are registered via Nodes.html.
+-->
+            `);
+            console.log(`Plugins.html: no shared nodes\n`);
+            return;
+        }
+
         const seenOnce = new Set<string>();
         const onceHtmlParts: string[] = [];
         const nodePluginParts: string[] = [];
 
-        Object.values(this._nodes).forEach(node => {
+        nodes.forEach(node => {
             console.log(`Building Plugins.html for: ${node.descriptor.id()}`);
             const nb = buildNodeBuilder(node.nodeClass);
 
@@ -286,14 +340,14 @@ module.exports = function (RED) {
             ].join('\n\n'));
         });
 
-        fs.writeFileSync(pluginsOutputFile + ".html", `
+        fs.writeFileSync(filePath, `
 <!--
 ${NodeGenerator.warning}
 -->
 ${onceHtmlParts.join('\n')}
 ${nodePluginParts.join('\n\n')}
         `);
-        console.log(`Done building Plugins.html\n`);
+        console.log(`Done building Plugins.html (${nodes.length} shared nodes)\n`);
     }
 
     private static generateHeader(node:NodeDescriptor){
@@ -320,7 +374,7 @@ class TypeUtility {
     private constructor(){}
 
     private static getPrototypes(t:INamedType):string[] {
-        if(!t.name){
+        if(!t || !t.name){
             return [];
         }
         else{

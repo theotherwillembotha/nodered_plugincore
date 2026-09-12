@@ -1,4 +1,5 @@
 
+import * as os from 'os';
 import {BaseService, ConfigNodeConfig, ConfigNode } from "../../NodeConstructor";
 import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
 import { NodeAPI, NodeAPISettingsWithData, Node } from "node-red";
@@ -6,7 +7,18 @@ import { LoggerTemplate, LoggerTemplateConfig } from "../template/LoggerTemplate
 
 // Build-time / optional runtime deps - lazy so they are never required at bundle load time.
 function getHandlebars(): any { return require('handlebars'); }
-function getNetwork(): any { return require('network'); }
+
+function getLocalIpAddress(): string {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name] ?? []) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return '127.0.0.1';
+}
 
 let _helpersRegistered = false;
 function ensureHelpersRegistered(): void {
@@ -134,7 +146,15 @@ export abstract class AbstractLogger<BaseLoggerConfig>{
 })
 export class LoggerService extends BaseService {
 
-    public static instanceID:string;
+    // Backed by a global so the value is shared across separately-bundled copies
+    // of plugincore (Nodes.js and Plugins.js each inline their own copy).
+    public static get instanceID(): string {
+        return (global as any).__plugincore_instance_id__ ?? '';
+    }
+    public static set instanceID(value: string) {
+        (global as any).__plugincore_instance_id__ = value;
+    }
+
     private red!: NodeAPI<NodeAPISettingsWithData>;
 
     constructor(){
@@ -143,12 +163,7 @@ export class LoggerService extends BaseService {
 
     public init(red: NodeAPI<NodeAPISettingsWithData>): void | Promise<void> {
         this.red = red;
-
-        return new Promise<void>((resolve) => {
-            getNetwork().get_active_interface((_err:any, obj:any) => {
-                LoggerService.instanceID = obj.ip_address;
-            });
-        });
+        LoggerService.instanceID = getLocalIpAddress();
     }
 
     public deinit(red: NodeAPI<NodeAPISettingsWithData>): void | Promise<void> {}

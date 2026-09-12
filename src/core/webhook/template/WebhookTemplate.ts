@@ -1,6 +1,9 @@
-import { BaseNodeConfig, Template, TemplateDescriptor } from "../../NodeConstructor"
-import { WebhookServerConfigNode } from "../node/WebhookServerConfigNode";
+import { BaseNodeConfig, Template } from "../../NodeConstructor"
 import { SourceUtility } from "../../NodeGenerator";
+import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
+import { DelegatedConfigReferenceNode } from "../../other/node/DelegatedConfigReferenceNode";
+import { WebhookServerConfigNode } from "../node/WebhookServerConfigNode";
+import { WebhookServerService } from "../service/WebhookServerService";
 import { RestAuthType, ApiKeyMechanismType } from "../../logger/service/LoggerService";
 
 export interface WebhookTemplateConfig extends BaseNodeConfig{
@@ -22,15 +25,10 @@ export type ReverseproxyConnection = {
     domainname:string
 }
 
+@TemplateDescription({
+    name: "webhook",
+    templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "WebhookTemplate.html",
+    dependencies: [DelegatedConfigReferenceNode, WebhookServerConfigNode, WebhookServerService],
+})
 export class WebhookTemplate extends Template {
-
-    static getTemplateDescriptor(): TemplateDescriptor {
-        return new TemplateDescriptor(
-            "webhook", WebhookTemplate, 
-            SourceUtility.getSourcePath("/build/", "/src/") + "WebhookTemplate.html",
-            [WebhookServerConfigNode])        
-    }
 }
-
-
-

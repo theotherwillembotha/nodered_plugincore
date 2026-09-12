@@ -581,8 +581,7 @@ export class NodeBuilder {
         }));
     }
 
-    public buildDeferredType(): string {
-        // Apply shadow defaults (same side-effect as buildType)
+    private applyShaddowDefaults(): void {
         let shaddowDefaults = Object.entries(this._defaults).filter(([name, template]) => template.type && template.type.endsWith("[]"));
         if (shaddowDefaults.length > 0) {
             this.addIncludeEditSave(this._name + "_shaddowDefaults",
@@ -596,8 +595,10 @@ export class NodeBuilder {
                 `}`
             );
         }
+    }
 
-        const registerTypeBody = `{
+    private buildRegisterTypeBody(): string {
+        return `{
             category: '${this._category}',
             ${(this._category !== "config" && this._icon) ? `icon: '${this._icon}',` : ""}
             ${(this._category !== "config" && this._color) ? `color: '${this._color}',` : ""}
@@ -624,6 +625,11 @@ export class NodeBuilder {
                 ${this._onIncludeEditDelete.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
             },
         }`;
+    }
+
+    public buildDeferredType(): string {
+        this.applyShaddowDefaults();
+        const registerTypeBody = this.buildRegisterTypeBody();
 
         return getBeautify().html_beautify(`
         <script type="text/javascript">
@@ -634,6 +640,16 @@ export class NodeBuilder {
                 }
             });
         }());
+        </script>`, beautifyOptions);
+    }
+
+    public buildStandardType(): string {
+        this.applyShaddowDefaults();
+        const registerTypeBody = this.buildRegisterTypeBody();
+
+        return getBeautify().html_beautify(`
+        <script type="text/javascript">
+            RED.nodes.registerType('${this._name}', ${registerTypeBody});
         </script>`, beautifyOptions);
     }
 
@@ -710,52 +726,14 @@ export class NodeBuilder {
         return script;
     }
 
-    public buildType():string{ 
-        // compose the shaddow defaults if need be.
-        let shaddowDefaults = Object.entries(this._defaults).filter(([name, template]) => template.type && template.type.endsWith("[]"));
-        if(shaddowDefaults.length > 0){
-            this.addIncludeEditSave(this._name + "_shaddowDefaults", 
-                `{ let node = this; ` + 
-                    shaddowDefaults
-                    .map(([name, template]) => `
-                    for(let i = 0; i < ${template.maxInstances}; i++){
-                        node["_${name}_" + i] = (node.${name}[i] || {}).proxy || "";
-                    }`)
-                    .join("\n\n") + 
-                `}`
-            );
-        }
+    public buildType():string{
+        this.applyShaddowDefaults();
+        const registerTypeBody = this.buildRegisterTypeBody();
 
         return getBeautify().html_beautify(`
         ${this._onIncludeOnce.map(entry => this.serializeHTML(entry.source, entry.script)).join("")}
         <script type="text/javascript">
-            RED.nodes.registerType('${this._name}',{      
-                category: '${this._category}',
-                ${(this._category !== "config" && this._icon) ? `icon: '${this._icon}',` : ""}
-                ${(this._category !== "config" && this._color) ? `color: '${this._color}',` : ""}
-                ${(this._category !== "config" && this._labelStyle) ? `labelStyle: '${this._labelStyle}',` : ""}
-                ${(this._label) ? `label: ${this._label},` : ""}
-                ${this._paletteLabel ? `paletteLabel: '${this._paletteLabel}',` : ""}
-                ${(this._category !== "config") ? `inputs:${this._inputs ? "1" : "0"},` : ""}
-                ${(this._category !== "config") ? `inputLabels:(i) => '${this._inputs}',` : ""}
-                ${(this._category !== "config") ? `outputs:${this._outputs.length},` : ""}
-                ${(this._category !== "config") ? `outputLabels:(i) => ${this.serializeProperty(this._outputs)}[i],` : ""}
-                defaults: {
-                    ${Object.entries(this._defaults).map(([key, value]) => this.serializeDefault(key, value)).join("\n")}
-                },
-                oneditprepare: function() {
-                    ${this._onIncludeEditPrepare.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
-                },
-                oneditsave: function() {
-                    ${this._onIncludeEditSave.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
-                },
-                oneditcancel: function() {
-                    ${this._onIncludeEditCancel.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
-                },
-                oneditdelete: function() {
-                    ${this._onIncludeEditDelete.map(entry => this.serializeJavaScript(entry.source, entry.script)).join("")}
-                },
-            });
+            RED.nodes.registerType('${this._name}', ${registerTypeBody});
         </script>`, beautifyOptions);
     };
 
