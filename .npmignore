@@ -12,3 +12,4 @@ UPGRADE-0.3.0.md
 PluginStarterGuide.md
 core.md
 tsconfig.json
+src/**

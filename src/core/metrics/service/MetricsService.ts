@@ -32,6 +32,7 @@ export interface MetricConfig {
     metric: string;
     flow: string;
     name: string;
+    description?: string;
 }
 
 export interface MetricLabels {

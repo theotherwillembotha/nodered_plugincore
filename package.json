@@ -1,6 +1,6 @@
 {
   "name": "@theotherwillembotha/node-red-plugincore",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A core framework for building production-grade Node-RED plugins, with built-in support for structured logging, metrics, and webhook ingestion.",
   "author": "Willem Botha (@theotherwillembotha)",
   "license": "ISC",
@@ -16,10 +16,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "npm run build",
-    "clean": "rm -rf ./build && rm -rf ./resources",
-    "build": "npm run clean && tsc && npm run generate-nodes && npm run copy-files",
+    "clean": "rm -rf ./build",
+    "build": "npm run clean && tsc && npm run inline-resources && npm run generate-nodes && npm run copy-files",
+    "inline-resources": "node scripts/inline-resources.js",
     "generate-nodes": "node build/GenerateNodes.js",
-    "copy-files": "cp -r ./icons ./build && mkdir -p ./resources && cp -r ./build/resources/. ./resources/"
+    "copy-files": "cp -r ./icons ./build"
   },
   "repository": {
     "type": "git",
@@ -31,9 +32,7 @@
   "types": "./build/index.d.ts",
   "files": [
     "build/",
-    "src/",
     "icons/",
-    "resources/",
     "documentation/",
     "LICENSE",
     "README.md"

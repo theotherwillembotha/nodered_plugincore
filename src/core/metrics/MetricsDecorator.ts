@@ -70,7 +70,8 @@ function resolveMetric(
 ): CounterMetric | GaugeMetric | HistogramMetric | SummaryMetric | undefined {
 
   const baseConfig = {
-    id: node.id(), flow: node.flow(), name: node.name(),
+    id: `${node.id()}_${metricsConfig.name}`, flow: node.flow(), name: node.name(),
+    description: metricsConfig.description || undefined,
   };
 
   if (metricsConfig.type === MetricType.Counter) {
@@ -78,7 +79,7 @@ function resolveMetric(
       console.warn(`[PluginCore] @Metrics Counter requested by node "${node.name()}" (${node.type()}) but the selected provider does not support Counter. Using DoNothing.`);
     }
     const counterConfig: CounterMetricConfig = {
-      ...baseConfig, type: "Counter", metric: metricsConfig.name,
+      ...baseConfig, type: node.type(), metric: metricsConfig.name,
     };
     return _metrics.counter(counterConfig);
   }
@@ -88,7 +89,7 @@ function resolveMetric(
       console.warn(`[PluginCore] @Metrics Gauge requested by node "${node.name()}" (${node.type()}) but the selected provider does not support Gauge. Using DoNothing.`);
     }
     const gaugeConfig: GaugeMetricConfig = {
-      ...baseConfig, type: "Gauge", metric: metricsConfig.name,
+      ...baseConfig, type: node.type(), metric: metricsConfig.name,
     };
     return _metrics.gauge(gaugeConfig);
   }
@@ -100,7 +101,7 @@ function resolveMetric(
       }
       if (metricsConfig.buckettype === BucketType.default) {
         const histogramConfig: HistogramMetricConfig = {
-          ...baseConfig, type: "Histogram", metric: metricsConfig.name,
+          ...baseConfig, type: node.type(), metric: metricsConfig.name,
           buckettype: metricsConfig.buckettype,
           bucketconfig: {},
         };
