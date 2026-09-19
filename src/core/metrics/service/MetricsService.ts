@@ -26,20 +26,15 @@ export interface MetricsConfig {
     id: string;
 }
 
-export interface NodeReference {
-    name: string;
-    type: string;
-    flow: string;
-    id: string;
-}
-
 export interface MetricConfig {
-    node: NodeReference;
-    metricname: string;
-    metricdescription?: string;
+    type: string;
+    id: string;
+    metric: string;
+    flow: string;
+    name: string;
 }
 
-interface Labels {
+export interface MetricLabels {
     flow: string;
     type: string;
     name: string;
@@ -49,20 +44,23 @@ interface Labels {
 
 export abstract class Metric<ConfigType extends MetricConfig> {
     private _config: ConfigType;
-    private _labels: Labels;
+    private _labels: MetricLabels;
 
     protected constructor(config: ConfigType) {
         this._config = config;
         this._labels = {
-            flow: config.node.flow,
-            type: config.node.type,
-            name: config.node.name,
-            id: config.node.id,
-            metric: config.metricname
+            type: config.type,
+            id: config.id,
+            metric: config.metric,
+            flow: config.flow,
+            name: config.name,
         };
     }
 
-    public labels(): Labels { return this._labels; }
+    public labels(): MetricLabels { return this._labels; }
+
+    public static labelNames(): string[] { return ['flow', 'type', 'name', 'id', 'metric']; }
+
     public config(): ConfigType { return this._config; }
 }
 
@@ -142,12 +140,14 @@ export interface HistogramMetricConfig extends MetricConfig {
 
 export interface HistogramMetric {
     observe(value: number): void;
+    reset(): void;
     subscribe(node: BaseNode<BaseNodeConfig>, callback: HistogramCallback): void;
     unsubscribe(node: BaseNode<BaseNodeConfig>): void;
 }
 
 export class DoNothingHistogramMetric implements HistogramMetric {
     public observe(_value: number): void {}
+    public reset(): void {}
     public subscribe(_node: BaseNode<BaseNodeConfig>, _callback: HistogramCallback): void {}
     public unsubscribe(_node: BaseNode<BaseNodeConfig>): void {}
 }
@@ -174,12 +174,14 @@ export interface SummaryMetricConfig extends MetricConfig {
 
 export interface SummaryMetric {
     observe(value: number): void;
+    reset(): void;
     subscribe(node: BaseNode<BaseNodeConfig>, callback: SummaryCallback): void;
     unsubscribe(node: BaseNode<BaseNodeConfig>): void;
 }
 
 export class DoNothingSummaryMetric implements SummaryMetric {
     public observe(_value: number): void {}
+    public reset(): void {}
     public subscribe(_node: BaseNode<BaseNodeConfig>, _callback: SummaryCallback): void {}
     public unsubscribe(_node: BaseNode<BaseNodeConfig>): void {}
 }
@@ -210,6 +212,35 @@ export abstract class MetricsContainer {
         console.warn(`[PluginCore] MetricsContainer: Summary is not supported by this provider.`);
         return new DoNothingSummaryMetric();
     }
+
+    /**
+     * Factory method for timer metrics. Called by flow nodes with the common
+     * metric config and provider-specific fragment data from the ConfigFragment UI.
+     * Providers override this to interpret their own fragment data and create the
+     * appropriate histogram or summary metric.
+     */
+    public createTimer(metricConfig: MetricConfig, fragmentData: any): HistogramMetric | SummaryMetric {
+        console.warn(`[PluginCore] MetricsContainer: createTimer is not supported by this provider.`);
+        return new DoNothingHistogramMetric();
+    }
+
+    /**
+     * Factory method for counter metrics. Called by flow nodes with the common
+     * metric config and provider-specific fragment data from the ConfigFragment UI.
+     */
+    public createCounter(metricConfig: MetricConfig, fragmentData: any): CounterMetric {
+        console.warn(`[PluginCore] MetricsContainer: createCounter is not supported by this provider.`);
+        return new DoNothingCounterMetric();
+    }
+
+    /**
+     * Factory method for gauge metrics. Called by flow nodes with the common
+     * metric config and provider-specific fragment data from the ConfigFragment UI.
+     */
+    public createGauge(metricConfig: MetricConfig, fragmentData: any): GaugeMetric {
+        console.warn(`[PluginCore] MetricsContainer: createGauge is not supported by this provider.`);
+        return new DoNothingGaugeMetric();
+    }
 }
 
 // Silent DoNothing - returned when no provider is installed. Does not warn since this is expected.
@@ -221,6 +252,9 @@ export class DoNothingMetricsContainer extends MetricsContainer {
     public gauge(_config: GaugeMetricConfig): GaugeMetric { return new DoNothingGaugeMetric(); }
     public histogram(_config: HistogramMetricConfig): HistogramMetric { return new DoNothingHistogramMetric(); }
     public summary(_config: SummaryMetricConfig): SummaryMetric { return new DoNothingSummaryMetric(); }
+    public createTimer(_metricConfig: MetricConfig, _fragmentData: any): HistogramMetric | SummaryMetric { return new DoNothingHistogramMetric(); }
+    public createCounter(_metricConfig: MetricConfig, _fragmentData: any): CounterMetric { return new DoNothingCounterMetric(); }
+    public createGauge(_metricConfig: MetricConfig, _fragmentData: any): GaugeMetric { return new DoNothingGaugeMetric(); }
 }
 
 // ******************************************************* //

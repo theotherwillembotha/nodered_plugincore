@@ -2,7 +2,7 @@
 import { NodeGenerator } from "./index.js"
 import { NodeTypeService } from "./core/tagging/service/NodeTypeService.js";
 
-// Plugincore is a build framework — it has no leaf nodes of its own.
+// Plugincore is a build framework - it has no leaf nodes of its own.
 // Infrastructure nodes (DelegatedConfigReferenceNode, config nodes, etc.)
 // are pulled in automatically via template dependencies when downstream
 // packages register their nodes.

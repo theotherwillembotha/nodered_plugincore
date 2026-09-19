@@ -1,12 +1,19 @@
 import { SourceUtility } from "../../NodeGenerator";
-import { Template } from "../../NodeConstructor"
+import { BaseNodeConfig, Template } from "../../NodeConstructor"
 import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
-import { CounterMetricConfigNode } from "../node/CounterMetricConfigNode";
+import { MetricsService, MetricsReference } from "../service/MetricsService";
+import { DelegatedConfigReferenceNode } from "../../other/node/DelegatedConfigReferenceNode";
+import { ConfigFragmentTemplate } from "../../configfragment/template/ConfigFragmentTemplate";
+
+export interface CounterMetricTemplateConfig extends BaseNodeConfig, MetricsReference {
+    resetOnDeploy: boolean;
+    providerConfig: any;
+}
 
 @TemplateDescription({
     name: "countermetric",
     templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "CounterMetricTemplate.html",
-    dependencies: [CounterMetricConfigNode],
+    dependencies: [DelegatedConfigReferenceNode, MetricsService, ConfigFragmentTemplate],
 })
 export class CounterMetricTemplate extends Template {
 }

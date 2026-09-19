@@ -1,0 +1,179 @@
+<script type="text/javascript" template-section="onCompose">
+    node.addDefault("providerConfig", { value: {}, required: false });
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    (function() {
+        let fragmentSection = $("#section_configfragment");
+        let fragmentContent = fragmentSection.find(".config-fragment-content");
+        let fragmentHeading = fragmentSection.find(".config-fragment-heading");
+        let fragmentBorder  = fragmentSection.find(".config-fragment-border");
+        let currentLifecycle = null;
+
+        fragmentSection.hide();
+
+        function getProviderType(configNodeId) {
+            if (!configNodeId || configNodeId === "_ADD_") return null;
+            let cn = RED.nodes.node(configNodeId);
+            return cn ? cn.type : null;
+        }
+
+        function parseFragmentSections(html) {
+            let temp = $("<div>").html(html);
+            let sections = {};
+
+            temp.find("script[fragment-section]").each(function() {
+                let sectionName = $(this).attr("fragment-section");
+                sections[sectionName] = $(this).text();
+                $(this).remove();
+            });
+
+            return sections;
+        }
+
+        function buildLifecycle(sections) {
+            let lifecycle = {};
+
+            if (sections.onLoad) {
+                try { lifecycle.onLoad = new Function("container", "config", sections.onLoad); } catch(e) { console.error("ConfigFragment: onLoad parse error:", e); }
+            }
+            if (sections.onSave) {
+                try { lifecycle.onSave = new Function("container", sections.onSave); } catch(e) { console.error("ConfigFragment: onSave parse error:", e); }
+            }
+            if (sections.onReplace) {
+                try { lifecycle.onReplace = new Function("container", sections.onReplace); } catch(e) { console.error("ConfigFragment: onReplace parse error:", e); }
+            }
+            if (sections.onDestroy) {
+                try { lifecycle.onDestroy = new Function("container", sections.onDestroy); } catch(e) { console.error("ConfigFragment: onDestroy parse error:", e); }
+            }
+
+            return lifecycle;
+        }
+
+        function applyMetaData(sections) {
+            let metaData = {};
+            if (sections.metaData) {
+                try { metaData = JSON.parse(sections.metaData); } catch(e) { console.error("ConfigFragment: metaData parse error:", e); }
+            }
+
+            if (templateConfig.showBorder && metaData.label) {
+                fragmentHeading.find("span").text(metaData.label);
+                fragmentHeading.show();
+                fragmentBorder.addClass("editorgroupborder");
+            } else {
+                fragmentHeading.hide();
+                fragmentBorder.removeClass("editorgroupborder");
+            }
+        }
+
+        async function loadFragment(providerType) {
+            // Clean up previous fragment
+            if (currentLifecycle && currentLifecycle.onReplace) {
+                try { currentLifecycle.onReplace(fragmentContent[0]); } catch(e) { console.error(e); }
+            }
+            currentLifecycle = null;
+            fragmentContent.empty();
+            fragmentHeading.hide();
+            fragmentBorder.removeClass("editorgroupborder");
+
+            if (!providerType) {
+                fragmentSection.hide();
+                return;
+            }
+
+            try {
+                let html = await $.ajax({
+                    url: "configfragment/" + encodeURIComponent(templateConfig.sectionType) + "/" + encodeURIComponent(providerType),
+                    type: "GET",
+                    dataType: "html"
+                });
+
+                if (!html) { fragmentSection.hide(); return; }
+
+                let sections = parseFragmentSections(html);
+
+                // Apply border and label from metaData
+                applyMetaData(sections);
+
+                // Inject the form HTML into the container
+                fragmentContent.html(sections.onForm || "");
+                fragmentSection.show();
+
+                // Build lifecycle hooks from individual sections
+                currentLifecycle = buildLifecycle(sections);
+
+                // Call onLoad with existing saved config (already a JSON object)
+                if (currentLifecycle.onLoad) {
+                    currentLifecycle.onLoad(fragmentContent[0], node.providerConfig || {});
+                }
+            } catch(e) {
+                if (e.status !== 404) console.error("ConfigFragment: load error:", e);
+                fragmentSection.hide();
+            }
+        }
+
+        // Watch the observed field for changes
+        let observedField = $(templateConfig.observe);
+        observedField.on('change.configfragment', function() {
+            loadFragment(getProviderType(observedField.val()));
+        });
+
+        // Initial load - retry until the observed field is populated by its template
+        let retries = 0;
+        (function tryInitialLoad() {
+            let val = observedField.val();
+            if (val && val !== "_ADD_" && val !== "") {
+                loadFragment(getProviderType(val));
+            } else if (retries++ < 20) {
+                setTimeout(tryInitialLoad, 100);
+            }
+        })();
+
+        // Store lifecycle reference so onEditSave / onEditCancel can access it
+        node._configFragmentCleanup = {
+            destroy: function() {
+                if (currentLifecycle && currentLifecycle.onDestroy) {
+                    try { currentLifecycle.onDestroy(fragmentContent[0]); } catch(e) {}
+                }
+            },
+            save: function() {
+                if (currentLifecycle && currentLifecycle.onSave) {
+                    try {
+                        return currentLifecycle.onSave(fragmentContent[0]) || {};
+                    } catch(e) {
+                        console.error("ConfigFragment: save error:", e);
+                    }
+                }
+                return node.providerConfig;
+            }
+        };
+    })();
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+    if (node._configFragmentCleanup) {
+        node.providerConfig = node._configFragmentCleanup.save();
+    }
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditCancel">
+    if (node._configFragmentCleanup) {
+        node._configFragmentCleanup.destroy();
+    }
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div style="margin-top: 12px;">
+        <div class="form-row editorsectionheading config-fragment-heading" style="display:none;">
+            <i class="w-16 fa fa-puzzle-piece"></i> <span></span>
+        </div>
+        <div class="config-fragment-border">
+            <div class="config-fragment-content"></div>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### Config Fragment
+: *provider config* (object) : Provider-specific configuration, dynamically rendered based on the selected backing provider.
+</script>

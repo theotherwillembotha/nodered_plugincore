@@ -10,6 +10,11 @@
     let metricsContainer = metricsEnabled.closest(".editorgroupborder");
     let metricsEnabledSection = metricsContainer.find("#section_metricsEnabled");
     metricsSection.hide();
+    
+    if (!templateConfig.showBorder) {
+        metricsSection.find(".editorsectionheading").hide();
+        metricsSection.find(".editorgroupborder").css({ border: "none", padding: 0, margin: 0 });
+    }
 
     let getMetricsProviderTypes = async function() {
         let types = [];

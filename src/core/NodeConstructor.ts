@@ -671,6 +671,10 @@ export class NodeBuilder {
                 if(Array.isArray(value)){
                     return `[${(value as []).map(t => this.serializeProperty(t)).join(", ")}]`
                 }
+                if(value === null){
+                    return 'null';
+                }
+                return JSON.stringify(value);
             }
         }
         throw new Error(`no serializeProperty handler for ${typeof value}, ${value}`)

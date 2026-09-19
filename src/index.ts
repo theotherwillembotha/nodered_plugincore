@@ -13,9 +13,6 @@ export * from "./core/metrics/template/MetricsTemplate";
 export * from "./core/metrics/template/CounterMetricTemplate";
 export * from "./core/metrics/template/GaugeMetricTemplate";
 export * from "./core/metrics/node/MetricsConfigNode";
-export * from "./core/metrics/node/CounterMetricConfigNode";
-export * from "./core/metrics/node/GaugeMetricConfigNode";
-export * from "./core/metrics/node/TimerMetricConfigNode";
 export * from "./core/metrics/template/TimerMetricTemplate";
 
 // STATE
@@ -37,9 +34,11 @@ export * from "./core/ui/template/ScriptEditorTemplate";
 // OTHER
 export * from "./core/other/node/DelegatedConfigReferenceNode";
 export * from "./core/other/service/InputService";
-export * from "./core/other/service/SettingsService";
 export * from "./core/other/template/BasicTemplate";
-export * from "./core/other/template/SettingsTemplate";
+
+// CONFIG FRAGMENT
+export * from "./core/configfragment/service/ConfigFragmentService";
+export * from "./core/configfragment/template/ConfigFragmentTemplate";
 
 // WEBHOOK
 export * from "./core/webhook/template/WebhookTemplate";

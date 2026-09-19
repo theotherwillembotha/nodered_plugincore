@@ -1,12 +1,19 @@
 import { SourceUtility } from "../../NodeGenerator";
-import { Template } from "../../NodeConstructor"
+import { BaseNodeConfig, Template } from "../../NodeConstructor"
 import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
-import { TimerMetricConfigNode } from "../node/TimerMetricConfigNode";
+import { MetricsService, MetricsReference } from "../service/MetricsService";
+import { DelegatedConfigReferenceNode } from "../../other/node/DelegatedConfigReferenceNode";
+import { ConfigFragmentTemplate } from "../../configfragment/template/ConfigFragmentTemplate";
+
+export interface TimerMetricTemplateConfig extends BaseNodeConfig, MetricsReference {
+    resetOnDeploy: boolean;
+    providerConfig: any;
+}
 
 @TemplateDescription({
     name: "timermetric",
     templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "TimerMetricTemplate.html",
-    dependencies: [TimerMetricConfigNode],
+    dependencies: [DelegatedConfigReferenceNode, MetricsService, ConfigFragmentTemplate],
 })
 export class TimerMetricTemplate extends Template {
 }
