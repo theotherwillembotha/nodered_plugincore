@@ -9,11 +9,17 @@
     let metricsSection = $("#section_metricsconfig");
     let metricsContainer = metricsEnabled.closest(".editorgroupborder");
     let metricsEnabledSection = metricsContainer.find("#section_metricsEnabled");
+    let metricsEnableCheck = metricsContainer.find(".metricsEnableCheck");
     metricsSection.hide();
-    
-    if (!templateConfig.showBorder) {
+
+    if (templateConfig.showBorder === false) {
         metricsSection.find(".editorsectionheading").hide();
         metricsSection.find(".editorgroupborder").css({ border: "none", padding: 0, margin: 0 });
+    }
+
+    if (templateConfig.showEnable === false) {
+        metricsEnableCheck.hide();
+        metricsEnabledSection.show();
     }
 
     let getMetricsProviderTypes = async function() {
@@ -138,6 +144,9 @@
     node = this;
     var selectedProvider = $("#metrics-selector").val();
     node.metricsReference = (selectedProvider && selectedProvider !== "_ADD_") ? selectedProvider : '';
+    if (templateConfig.showEnable === false) {
+        node.metricsEnabled = !!node.metricsReference;
+    }
 </script>
 
 <script type="text/html" template-section="onIncludeEditForm">
@@ -147,8 +156,9 @@
         </div>
         <div class="editorgroupborder">
             <div class="form-row nomargin metricsEnableCheck">
-                <input type="checkbox" id="{{defaults.metricsEnabled}}" value="false" style="margin:8px 0 10px 102px; width:20px;" />
-                <label style="width:auto" for="{{defaults.metricsEnabled}}"><span>Enable Metrics</span></label>
+                <label class="towb_editorlabel">&nbsp;</label>
+                <input class="towb_checkbox" type="checkbox" id="{{defaults.metricsEnabled}}" value="false" />
+                <label class="towb_checkboxlabel" for="{{defaults.metricsEnabled}}"><span>Enable Metrics</span></label>
             </div>
 
             <div id="section_metricsEnabled">
