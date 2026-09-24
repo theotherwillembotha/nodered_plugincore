@@ -108,8 +108,12 @@
         }
     });
 
+    let counterNoProvidersNote = $("#counter-no-providers-note");
     getMetricsProviderTypes().then(providerTypes => {
-        if (providerTypes.length === 0) return;
+        if (providerTypes.length === 0) {
+            counterNoProvidersNote.show();
+            return;
+        }
         counterMetricSection.show();
         updateMetricsSelectorList().then(() => {
             metricsSelector.val(node.metricsReference);
@@ -120,12 +124,45 @@
 
 <script type="text/javascript" template-section="onIncludeEditSave">
     node = this;
-    var selectedProvider = $("#metrics-selector").val();
-    node.metricsReference = (selectedProvider && selectedProvider !== "_ADD_") ? selectedProvider : '';
+
+    // ── HERE BE DRAGONS — see LoggerTemplate.html for full explanation ──
+    var _metOldRef = node.metricsReference;
+    var _metNewRef = $("#metrics-selector").val();
+    _metNewRef = (_metNewRef && _metNewRef !== "_ADD_") ? _metNewRef : '';
+
+    if (_metOldRef !== _metNewRef) {
+        if (_metOldRef) {
+            var _metOldCfg = RED.nodes.node(_metOldRef);
+            if (_metOldCfg) {
+                var _metIdx = _metOldCfg.users.indexOf(node);
+                if (_metIdx !== -1) _metOldCfg.users.splice(_metIdx, 1);
+                RED.events.emit("nodes:change", _metOldCfg);
+            }
+        }
+        if (_metNewRef) {
+            var _metNewCfg = RED.nodes.node(_metNewRef);
+            if (_metNewCfg && _metNewCfg.users.indexOf(node) === -1) {
+                _metNewCfg.users.push(node);
+                RED.events.emit("nodes:change", _metNewCfg);
+            }
+        }
+    }
+    node.metricsReference = _metNewRef;
     node.metricsEnabled = !!node.metricsReference;
 </script>
 
 <script type="text/html" template-section="onIncludeEditForm">
+    <div id="counter-no-providers-note" style="display:none;">
+        <div class="form-row editorsectionheading">
+            <i class="w-16 fa fa-bar-chart"></i> <span>Counter Metric</span>
+        </div>
+        <div class="editorgroupborder">
+            <div class="form-row nomargin" style="padding:8px;">
+                <i class="fa fa-info-circle" style="color:#3f81b3;"></i>
+                <span style="margin-left:4px;">No metrics providers installed. Install a metrics plugin (e.g. <strong>@theotherwillembotha/node-red-prometheus</strong>) to enable metrics on this node.</span>
+            </div>
+        </div>
+    </div>
     <div id="section_countermetricconfig" style="display:none;">
         <div class="form-row editorsectionheading">
             <i class="w-16 fa fa-bar-chart"></i> <span>Counter Metric</span>
@@ -133,8 +170,8 @@
         <div class="editorgroupborder">
             <div class="form-row nomargin">
                 <label class="towb_editorlabel">&nbsp;</label>
-                <input class="towb_checkbox" type="checkbox" id="node-input-resetOnDeploy" value="false" />
-                <label class="towb_checkboxlabel" for="node-input-resetOnDeploy"><span>Reset on Deploy</span></label>
+                <input class="towb_checkbox" type="checkbox" id="{{defaults.resetOnDeploy}}" value="false" />
+                <label class="towb_checkboxlabel" for="{{defaults.resetOnDeploy}}"><span>Reset on Deploy</span></label>
             </div>
 
             <div id="section_metricsEnabled">

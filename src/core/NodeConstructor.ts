@@ -505,9 +505,21 @@ export class NodeBuilder {
         return this;
     }
 
-    public addTemplate(template: { template: ITemplateClass; config: TemplateConfig; }): NodeBuilder {
+    public addTemplate(template: { template: ITemplateClass; config: TemplateConfig; }, seen?: Set<string>): NodeBuilder {
         let templateDescriptor = template.template.getTemplateDescriptor();
         let templateConfig = template.config;
+
+        // Track which templates have been processed to avoid duplicates.
+        if (!seen) seen = new Set<string>();
+        if (seen.has(templateDescriptor.name())) return this;
+        seen.add(templateDescriptor.name());
+
+        // Recursively process template dependencies first (depth-first) so that
+        // base templates like BasicTemplate are loaded before the templates that
+        // depend on them.
+        templateDescriptor.dependencies()
+            .filter((dep: any) => dep && dep.getTemplateDescriptor)
+            .forEach((dep: any) => this.addTemplate({ template: dep, config: {} }, seen));
 
         // load the html source file
         let uiDom = new (getJSDOM())(fs.readFileSync(templateDescriptor.templateFile()!));

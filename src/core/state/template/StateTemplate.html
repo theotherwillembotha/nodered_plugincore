@@ -12,7 +12,7 @@
     let stateSection     = $("#state-config-section");
     let typeSelector     = stateSection.find("#state-type-selector");
     let configureBtn     = stateSection.find("#state-configure-btn");
-    let stateRefSelector = stateSection.find("#state-ref-selector");
+    let stateRefSelector = stateSection.find("#{{defaults.stateReference}}");
 
     // Seed the hidden select with the current value and record the original for cleanup.
     stateRefSelector.empty();
@@ -126,10 +126,10 @@
 
         if (currentNode && currentNode.type === selectedType) {
             // Editing an existing owned node - nodes:add won't fire, select already has the value.
-            RED.editor.editConfig("#state-ref-selector", selectedType, currentRef);
+            RED.editor.editConfig("#{{defaults.stateReference}}", selectedType, currentRef);
         } else {
             // Creating a new instance - nodes:add handler will capture the new ID.
-            RED.editor.editConfig("#state-ref-selector", selectedType, "_ADD_");
+            RED.editor.editConfig("#{{defaults.stateReference}}", selectedType, "_ADD_");
         }
     });
 
@@ -179,11 +179,10 @@
         RED.events.off('nodes:add', _stateNodeAddHandler);
         _stateSection.data('stateNodeAddHandler', null);
     }
-    var _stateRefSelector = _stateSection.find("#state-ref-selector");
-    node.stateReference   = _stateRefSelector.val() || '';
-    console.log("StateTemplate: save - stateReference:", node.stateReference);
+    var _stateRefSelector = _stateSection.find("#{{defaults.stateReference}}");
+    var _stateNewRef      = _stateRefSelector.val() || '';
     var _stateOriginalRef = _stateRefSelector.data('originalRef') || '';
-    if (_stateOriginalRef && _stateOriginalRef !== node.stateReference) {
+    if (_stateOriginalRef && _stateOriginalRef !== _stateNewRef) {
         var _stateOldNode = RED.nodes.node(_stateOriginalRef);
         if (_stateOldNode) {
             RED.nodes.remove(_stateOldNode);
@@ -199,7 +198,7 @@
         RED.events.off('nodes:add', _stateNodeAddHandler);
         _stateSection.data('stateNodeAddHandler', null);
     }
-    var _stateRefSelector = _stateSection.find("#state-ref-selector");
+    var _stateRefSelector = _stateSection.find("#{{defaults.stateReference}}");
     var _stateCurrentRef  = _stateRefSelector.val() || '';
     var _stateOriginalRef = _stateRefSelector.data('originalRef') || '';
     if (_stateCurrentRef && _stateCurrentRef !== _stateOriginalRef) {
@@ -228,7 +227,7 @@
                 </div>
             </div>
             <!-- Hidden real select - populated by nodes:add handler when a new state provider is created. -->
-            <select id="state-ref-selector" style="display:none;"></select>
+            <select id="{{defaults.stateReference}}" style="display:none;"></select>
         </div>
     </div>
 </script>

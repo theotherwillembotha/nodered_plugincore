@@ -1,77 +1,7 @@
 <div template-section="onIncludeOnce">
-<style>
-  .editorgroupborder {
-      border-width:1px;
-      border-style:solid;
-      border-color:lightgray;
-      padding: 3px;
-      margin-top: 2px;
-      margin-bottom: 2px;
-  }
-
-  .editorsectionheading {
-      font-weight: 600;
-      margin-bottom:1px !important; 
-      margin-top:6px !important; 
-  }
-
-  .nomargin {
-      margin-bottom:1px !important; 
-      margin-top:1px !important; 
-  }
-
-  .slidecontainer {
-    width: 100%;
-  }
-
-  .slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 25px;
-    background: #d3d3d3;
-    outline: none;
-    opacity: 0.7;
-    -webkit-transition: .2s;
-    transition: opacity .2s;
-  }
-  
-  .slider:hover {
-    opacity: 1;
-  }
-  
-  .slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 25px;
-    height: 25px;
-    background: #04AA6D;
-    cursor: pointer;
-  }
-  
-  .slider::-moz-range-thumb {
-    width: 25px;
-    height: 25px;
-    background: #04AA6D;
-    cursor: pointer;
-  }
-
-    .towb_editorlabel {
-        width: 120px !important;
-    }
-    input.towb_editorfield, select.towb_editorfield, textarea.towb_editorfield {
-        width: 70% !important;
-    }
-    input.towb_editorfield_short, select.towb_editorfield_short {
-        width: 30% !important;
-    }
-
-</style>
-
+<!-- Logger-specific styles (base styles provided by BasicTemplate) -->
 <script type="text/javascript">
-
-    // CSS
-    dropdownStyles = `
+    $('<style>').text(`
     .loggertype-dropdown {
         position: absolute;
         background: white;
@@ -90,19 +20,15 @@
     .loggertype-dropdown .dropdown-item:hover {
         background: #f0f0f0;
     }
-    `;
-    $('<style>').text(dropdownStyles).appendTo('head');
-
+    `).appendTo('head');
 </script>
-
-
 </div>
 
 
 <script type="text/javascript" template-section="onCompose">
     node
         .addDefault("logEnabled", { value:false, required:true})
-        .addDefault("logger", { required:false, value:'', type:"DelegatedConfigReferenceNode"})
+        .addDefault("loggerReference", { required:false, value:'', type:"DelegatedConfigReferenceNode"})
         .addDefault("logTemplateOverrideEnabled",  {value:false})
         .addDefault("logTemplateOverride", {value:"message:{{msg}}"})
 </script>
@@ -161,11 +87,11 @@
     logEnabled.on('change', function() {
         if(logEnabled.prop("checked")){
             logEnabledSection.show();
-            node._def.defaults.logger.required = true;
+            node._def.defaults.loggerReference.required = true;
         }
         else{
             logEnabledSection.hide()
-            node._def.defaults.logger.required = false;
+            node._def.defaults.loggerReference.required = false;
         }
     });
 
@@ -189,6 +115,8 @@
     let loggerSelector = $("#logger-selector");
     let loggerEditButton = $("#logger-edit-btn");
     let loggerAddButton = $("#logger-add-btn");
+
+    loggerSelector.val(node.loggerReference || '_ADD_');
 
 
     loggerEditButton.on('click', async function(event){
@@ -261,14 +189,34 @@
             loggerEditButton.removeClass("disabled")
         }
     });
-    
+
+    // Auto-select a newly created logger config node.
+    let _loggerNodeAddHandler = function(addedNode) {
+        getLoggerTypes().then(function(types) {
+            let typeIds = types.map(function(t) { return t.id; });
+            if (typeIds.indexOf(addedNode.type) < 0) return;
+            updateLoggerSelectorList().then(() => {
+                loggerSelector.val(addedNode.id);
+                loggerSelector.trigger('change');
+            });
+        });
+    };
+    RED.events.on('nodes:add', _loggerNodeAddHandler);
+    // Store handler for cleanup in onIncludeEditSave / onIncludeEditCancel.
+    loggerSelector.data('nodeAddHandler', _loggerNodeAddHandler);
+
     // Show the logger section only if at least one logger type is registered.
-    // If nodered_logging (or any other logger provider) is not installed, the section stays hidden.
+    // If nodered_logging (or any other logger provider) is not installed,
+    // show an informational note instead of the logger controls.
+    let loggerNoProvidersNote = $("#logger-no-providers-note");
     getLoggerTypes().then(loggerTypes => {
-        if (loggerTypes.length === 0) return;
+        if (loggerTypes.length === 0) {
+            loggerNoProvidersNote.show();
+            return;
+        }
         loggerSection.show();
         updateLoggerSelectorList().then(() => {
-            loggerSelector.val(node.logger);
+            loggerSelector.val(node.loggerReference || '_ADD_');
             loggerSelector.trigger('change');
         });
     });
@@ -277,14 +225,77 @@
 
 <script type="text/javascript" template-section="onIncludeEditSave">
     node = this;
-    var selectedLogger = $("#logger-selector").val();
-    node.logger = (selectedLogger && selectedLogger !== "_ADD_") ? selectedLogger : '';
+
+    // Clean up the nodes:add listener.
+    var _logAddHandler = $("#logger-selector").data('nodeAddHandler');
+    if (_logAddHandler) {
+        RED.events.off('nodes:add', _logAddHandler);
+        $("#logger-selector").data('nodeAddHandler', null);
+    }
+
+    // ── HERE BE DRAGONS ──────────────────────────────────────────────────
+    // Node-RED's built-in reference counting (properties.js apply()) only
+    // works for defaults whose form element follows the #node-input-<prop>
+    // naming convention. Our logger/metrics selectors use custom IDs
+    // because the built-in config-node picker is tied to a single type,
+    // while we need to show a hierarchy of concrete implementations
+    // (ConsoleLoggerConfigNode, RestLoggerConfigNode, etc.).
+    //
+    // We therefore manually manage configNode.users here, mirroring the
+    // exact logic from Node-RED's apply() (properties.js lines 114-126).
+    // ─────────────────────────────────────────────────────────────────────
+    var _logOldRef = node.loggerReference;
+    var _logNewRef = $("#logger-selector").val();
+    _logNewRef = (_logNewRef && _logNewRef !== "_ADD_") ? _logNewRef : '';
+
+    if (_logOldRef !== _logNewRef) {
+        if (_logOldRef) {
+            var _logOldCfg = RED.nodes.node(_logOldRef);
+            if (_logOldCfg) {
+                var _logIdx = _logOldCfg.users.indexOf(node);
+                if (_logIdx !== -1) _logOldCfg.users.splice(_logIdx, 1);
+                RED.events.emit("nodes:change", _logOldCfg);
+            }
+        }
+        if (_logNewRef) {
+            var _logNewCfg = RED.nodes.node(_logNewRef);
+            if (_logNewCfg && _logNewCfg.users.indexOf(node) === -1) {
+                _logNewCfg.users.push(node);
+                RED.events.emit("nodes:change", _logNewCfg);
+            }
+        }
+    }
+    node.loggerReference = _logNewRef;
+
     node.logTemplateOverride = node.logTemplateOverrideEditor.getValue();
     node.logTemplateOverrideEditor.destroy();
     delete node.logTemplateOverrideEditor;
 </script>
 
+<script type="text/javascript" template-section="onIncludeEditCancel">
+    // Clean up the nodes:add listener.
+    var _logAddHandler = $("#logger-selector").data('nodeAddHandler');
+    if (_logAddHandler) {
+        RED.events.off('nodes:add', _logAddHandler);
+        $("#logger-selector").data('nodeAddHandler', null);
+    }
+
+    node.logTemplateOverrideEditor.destroy();
+    delete node.logTemplateOverrideEditor;
+</script>
+
 <script type="text/html" template-section="onIncludeEditForm">
+    <div id="logger-no-providers-note" style="display:none;">
+        <div class="form-row editorsectionheading">
+            <i class="w-16 fa fa-eye"></i> <span>Logging</span>
+        </div>
+        <div class="editorgroupborder">
+            <div class="form-row nomargin" style="padding:8px;">
+                <i class="fa fa-info-circle" style="color:#3f81b3;"></i>
+                <span style="margin-left:4px;">No logging providers installed. Install a logger plugin (e.g. <strong>@theotherwillembotha/node-red-logging</strong>) to enable logging on this node.</span>
+            </div>
+        </div>
+    </div>
     <div id="section_loggerconfig" >
         <div class="form-row editorsectionheading">
             <i class="w-16 fa fa-eye"></i> <span>Logging</span>

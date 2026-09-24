@@ -28,7 +28,7 @@ export function Logger(debug?:string):Function {
                 }
 
                 // get the logger config node.
-                let loggerConfigNode:LoggerConfigNode<LoggerConfigNodeConfig, AbstractLogger<BaseLoggerConfig>> =(NodeManager.RED.nodes.getNode(config.logger) as any).node();
+                let loggerConfigNode:LoggerConfigNode<LoggerConfigNodeConfig, AbstractLogger<BaseLoggerConfig>> =(NodeManager.RED.nodes.getNode(config.loggerReference) as any).node();
 
                 let loggerTemplateConfig:LoggerTemplateConfig = {
                   id:config.id,
@@ -77,7 +77,7 @@ export function Logger(debug?:string):Function {
                 }
 
                 // get the logger config node.
-                let loggerConfigNode:LoggerConfigNode<LoggerConfigNodeConfig, AbstractLogger<BaseLoggerConfig>> =(NodeManager.RED.nodes.getNode(config.logger) as any).node();
+                let loggerConfigNode:LoggerConfigNode<LoggerConfigNodeConfig, AbstractLogger<BaseLoggerConfig>> =(NodeManager.RED.nodes.getNode(config.loggerReference) as any).node();
 
                 let loggerTemplateConfig:LoggerTemplateConfig = {
                   id:config.id,

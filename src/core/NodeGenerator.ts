@@ -119,144 +119,27 @@ class NodeGenerator {
         // STEP 1. Generate Nodes.html with standard client-side definitions for owned nodes.
         this.generateNodesHtml(nodesOutputFile + ".html", ownedNodes);
 
-        // Step 3. compose the JS structure for each of the nodes.
-        // 1. get a list of the files to import.
-        let importList = [
-            ...Object.values(this._nodes).map(node => {
-                return `const ${node.descriptor.id()} = require("${node.descriptor.package()}").${node.descriptor.id()};`;
-                //let nodeFile = "./" + node.group() + "/" + node.sourceFile();
-                //return `const ${node.name()} = require("${nodeFile}");`;
-            }),
-        ]
-        .join("\n");
-
-        // 2. get the exported modules that have to be regestered by the node manager.
-        let moduleExports = Object.values(this._nodes).map(node => {
-            return `    manager.registerNodeType("${node.descriptor.id()}", ${node.descriptor.id()});`;
-        }).join("\n");
-
-        fs.writeFileSync(nodesOutputFile + ".js", `
-/*
-${NodeGenerator.warning}
-*/
-"use strict";
-const { NodeManager } = require("./runtime/NodeManagerRuntime");
-${importList}
-module.exports = (RED) => {
-let manager = new NodeManager(RED);
-${moduleExports}
-}
-
-        `);
+        // STEP 2. Generate Nodes.js with backend registration for OWNED nodes only.
+        // Shared nodes are registered in Plugins.js so that their backend registration
+        // lives in the same node-set as their deferred frontend registration in Plugins.html.
+        // This ensures the registry:node-set-added event fires after the deferred listeners
+        // in Plugins.html are in place.
+        this.generateNodesJs(nodesOutputFile + ".js", ownedNodes);
 
         // Copy NodeManagerRuntime.js into the plugin's build/runtime/ folder so that
         // the generated Nodes.js require("./runtime/NodeManagerRuntime") resolves locally
         // with no dependency on plugincore being installed in the user's environment.
-        const outputDir = path.dirname(nodesOutputFile);
-        const runtimeDestDir = path.join(outputDir, 'runtime');
-        const runtimeDestPath = path.join(runtimeDestDir, 'NodeManagerRuntime.js');
+        this.copyNodeManagerRuntime(path.dirname(nodesOutputFile));
 
-        let runtimeSrcPath: string;
-        try {
-            // Resolves when this is a consumer plugin - plugincore is in node_modules.
-            runtimeSrcPath = require.resolve('@theotherwillembotha/node-red-plugincore/build/runtime/NodeManagerRuntime');
-        } catch {
-            // We ARE plugincore - NodeManagerRuntime.js is compiled alongside us in build/core/.
-            runtimeSrcPath = path.join(__dirname, 'NodeManagerRuntime.js');
-        }
+        console.log(`Done building ${allNodes.length} nodes`);
+        console.log(`  Owned (Nodes.js):   ${ownedNodes.map(n => n.descriptor.id()).join(', ') || '(none)'}`);
+        console.log(`  Shared (Plugins.js): ${sharedNodes.map(n => n.descriptor.id()).join(', ') || '(none)'}\n`);
 
-        if (path.resolve(runtimeSrcPath) !== path.resolve(runtimeDestPath)) {
-            fs.mkdirSync(runtimeDestDir, { recursive: true });
-            fs.copyFileSync(runtimeSrcPath, runtimeDestPath);
-        }
-        console.log(`NodeManagerRuntime.js → ${runtimeDestPath}`);
-
-        console.log(`Done building ${Object.keys(this._nodes).length} nodes\n${Object.values(this._nodes).map(node => " - " + node.descriptor.id() + "\n").join("")}\n`);
-
-        let serviceExports = this._services.map(service => {
-            return `    manager.registerService(${service.name()}.${service.name()});`
-        }).join("\n")
-
-        let serviceImports = [...this._services.map(service => {
-            return `const ${service.name()} = require("${service.sourceFile()}").${service.name()};`;
-        })].join("\n")
-
-        let output = `
-/*
-${NodeGenerator.warning}
-*/
-"use strict";
-const runtime = require("node-red").runtime;
-${serviceImports}
-
-module.exports = function (RED) {
-
-    // 1. make a list of all the plugins that need to be installed.
-    let pluginList =  [${this._services.map(service => service.name()).join(", ")}]
-        .map(service => service.getServiceDescriptor())
-        .filter(plugin => !RED.plugins.get(plugin.id()));
-
-    // 2. register a listener if there are any plugins in the pluginList.
-    if(pluginList.length > 0){
-        RED.events.on('registry:plugin-added', async pluginID => {
-
-            let addedPlugin = pluginList.find(plugin => plugin.id() === pluginID);
-            let plugin = RED.plugins.get(pluginID);
-
-            if(addedPlugin && plugin.instantiate && !plugin.instance){
-                plugin.instance = new plugin.class();
-
-                // instantiate the plugin.
-                await plugin.instance.init(RED);
-
-                // Eagerly call onDeploy with any pre-existing saved flows so that
-                // service registries (MetricsService, WebhookServerService, etc.) are
-                // populated before config nodes are constructed during flow startup.
-                // Without this, MetricsConfigNode._metrics is undefined on first boot.
-                const existingFlows = await runtime.flows.getFlows({});
-                const hasExistingFlows = existingFlows && existingFlows.flows && existingFlows.flows.length > 0;
-                if (hasExistingFlows) {
-                    await plugin.instance.onDeploy(existingFlows);
-                }
-
-                // publish an event that it has ben deployed.
-                RED.events.emit("plugin.instantiated", pluginID);
-
-                pluginList.splice(pluginList.findIndex(current => current.id() === addedPlugin.id()), 1);
-
-                // register a flow deployment listener.
-                // startupDeployment is only needed for a truly fresh Node-RED with no saved flows.
-                let startupDeployment = !hasExistingFlows;
-                RED.events.on('runtime-event', async (event) => {
-                    // startup deployment (fresh Node-RED with no pre-existing flows).
-                    if ("runtime-deploy" === event?.id && startupDeployment) {
-                        startupDeployment = false;
-                        const flows = await runtime.flows.getFlows({});
-                        await plugin.instance.onDeploy(flows);
-                    }
-
-                    // stopping flows on redeployment.
-                    if ("runtime-state" === event?.id && event?.payload?.state === "stop" && event?.payload?.deploy) {
-                        const flows = await runtime.flows.getFlows({});
-                        await plugin.instance.onDeploy(flows);
-                    }
-                });
-            }
-        });
-    }
-
-    // 3. register the plugins.
-    [...pluginList].forEach(plugin => {
-        RED.plugins.registerPlugin(plugin.id(), {
-            type: plugin.type(),
-            instantiate:true,
-            class: plugin.clazz()
-        });
-    })
-};
-`
-        fs.writeFileSync(pluginsOutputFile + ".js", output);
-        console.log(`Done building ${this._services.length} services\n${this._services.map(service => " - " + service.name() + "\n").join("")}\n`);
+        // STEP 3. Generate Plugins.js with services AND shared node registration.
+        // Shared nodes are registered here (not in Nodes.js) so that they belong to
+        // the plugins/ node-set. This ensures the registry:node-set-added event fires
+        // after the deferred frontend listeners in Plugins.html are already in place.
+        this.generatePluginsJs(pluginsOutputFile + ".js", sharedNodes);
 
         // STEP 4. Generate Plugins.html with deferred client-side definitions for shared nodes.
         this.generatePluginsHtml(pluginsOutputFile + ".html", sharedNodes);
@@ -348,6 +231,147 @@ ${onceHtmlParts.join('\n')}
 ${nodePluginParts.join('\n\n')}
         `);
         console.log(`Done building Plugins.html (${nodes.length} shared nodes)\n`);
+    }
+
+    private generateNodesJs(filePath: string, ownedNodes: {nodeClass: INodeClass, descriptor: NodeDescriptor}[]): void {
+        const importList = ownedNodes.map(node =>
+            `const ${node.descriptor.id()} = require("${node.descriptor.package()}").${node.descriptor.id()};`
+        ).join("\n");
+
+        const moduleExports = ownedNodes.map(node =>
+            `    manager.registerNodeType("${node.descriptor.id()}", ${node.descriptor.id()});`
+        ).join("\n");
+
+        fs.writeFileSync(filePath, `
+/*
+${NodeGenerator.warning}
+*/
+"use strict";
+const { NodeManager } = require("./runtime/NodeManagerRuntime");
+${importList}
+module.exports = (RED) => {
+let manager = new NodeManager(RED);
+${moduleExports}
+}
+        `);
+    }
+
+    private generatePluginsJs(filePath: string, sharedNodes: {nodeClass: INodeClass, descriptor: NodeDescriptor}[]): void {
+        const serviceImports = this._services.map(service =>
+            `const ${service.name()} = require("${service.sourceFile()}").${service.name()};`
+        ).join("\n");
+
+        // Import shared nodes so they can be registered on the backend as part of
+        // this plugin node-set (matching the deferred frontend in Plugins.html).
+        const sharedNodeImports = sharedNodes.map(node =>
+            `const ${node.descriptor.id()} = require("${node.descriptor.package()}").${node.descriptor.id()};`
+        ).join("\n");
+
+        const sharedNodeRegistrations = sharedNodes.map(node =>
+            `    manager.registerNodeType("${node.descriptor.id()}", ${node.descriptor.id()});`
+        ).join("\n");
+
+        const output = `
+/*
+${NodeGenerator.warning}
+*/
+"use strict";
+const runtime = require("node-red").runtime;
+const { NodeManager } = require("./runtime/NodeManagerRuntime");
+${serviceImports}
+${sharedNodeImports}
+
+module.exports = function (RED) {
+
+    // 1. Register shared (infrastructure) nodes on the backend.
+    // These are registered here rather than in Nodes.js so that they belong to
+    // the plugins/ node-set, ensuring the registry:node-set-added event fires
+    // after the deferred frontend listeners in Plugins.html are in place.
+${sharedNodeRegistrations ? `    let manager = new NodeManager(RED);\n${sharedNodeRegistrations}\n` : ''}
+    // 2. make a list of all the plugins that need to be installed.
+    let pluginList =  [${this._services.map(service => service.name()).join(", ")}]
+        .map(service => service.getServiceDescriptor())
+        .filter(plugin => !RED.plugins.get(plugin.id()));
+
+    // 3. register a listener if there are any plugins in the pluginList.
+    if(pluginList.length > 0){
+        RED.events.on('registry:plugin-added', async pluginID => {
+
+            let addedPlugin = pluginList.find(plugin => plugin.id() === pluginID);
+            let plugin = RED.plugins.get(pluginID);
+
+            if(addedPlugin && plugin.instantiate && !plugin.instance){
+                plugin.instance = new plugin.class();
+
+                // instantiate the plugin.
+                await plugin.instance.init(RED);
+
+                // Eagerly call onDeploy with any pre-existing saved flows so that
+                // service registries (MetricsService, WebhookServerService, etc.) are
+                // populated before config nodes are constructed during flow startup.
+                // Without this, MetricsConfigNode._metrics is undefined on first boot.
+                const existingFlows = await runtime.flows.getFlows({});
+                const hasExistingFlows = existingFlows && existingFlows.flows && existingFlows.flows.length > 0;
+                if (hasExistingFlows) {
+                    await plugin.instance.onDeploy(existingFlows);
+                }
+
+                // publish an event that it has ben deployed.
+                RED.events.emit("plugin.instantiated", pluginID);
+
+                pluginList.splice(pluginList.findIndex(current => current.id() === addedPlugin.id()), 1);
+
+                // register a flow deployment listener.
+                // startupDeployment is only needed for a truly fresh Node-RED with no saved flows.
+                let startupDeployment = !hasExistingFlows;
+                RED.events.on('runtime-event', async (event) => {
+                    // startup deployment (fresh Node-RED with no pre-existing flows).
+                    if ("runtime-deploy" === event?.id && startupDeployment) {
+                        startupDeployment = false;
+                        const flows = await runtime.flows.getFlows({});
+                        await plugin.instance.onDeploy(flows);
+                    }
+
+                    // stopping flows on redeployment.
+                    if ("runtime-state" === event?.id && event?.payload?.state === "stop" && event?.payload?.deploy) {
+                        const flows = await runtime.flows.getFlows({});
+                        await plugin.instance.onDeploy(flows);
+                    }
+                });
+            }
+        });
+    }
+
+    // 4. register the plugins.
+    [...pluginList].forEach(plugin => {
+        RED.plugins.registerPlugin(plugin.id(), {
+            type: plugin.type(),
+            instantiate:true,
+            class: plugin.clazz()
+        });
+    })
+};
+`;
+        fs.writeFileSync(filePath, output);
+        console.log(`Done building ${this._services.length} services\n${this._services.map(service => " - " + service.name() + "\n").join("")}\n`);
+    }
+
+    private copyNodeManagerRuntime(outputDir: string): void {
+        const runtimeDestDir = path.join(outputDir, 'runtime');
+        const runtimeDestPath = path.join(runtimeDestDir, 'NodeManagerRuntime.js');
+
+        let runtimeSrcPath: string;
+        try {
+            runtimeSrcPath = require.resolve('@theotherwillembotha/node-red-plugincore/build/runtime/NodeManagerRuntime');
+        } catch {
+            runtimeSrcPath = path.join(__dirname, 'NodeManagerRuntime.js');
+        }
+
+        if (path.resolve(runtimeSrcPath) !== path.resolve(runtimeDestPath)) {
+            fs.mkdirSync(runtimeDestDir, { recursive: true });
+            fs.copyFileSync(runtimeSrcPath, runtimeDestPath);
+        }
+        console.log(`NodeManagerRuntime.js → ${runtimeDestPath}`);
     }
 
     private static generateHeader(node:NodeDescriptor){

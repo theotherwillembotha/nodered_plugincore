@@ -1,6 +1,7 @@
 import { BaseNodeConfig, Template } from "../../NodeConstructor"
 import { SourceUtility } from "../../NodeGenerator";
 import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator";
+import { BasicTemplate } from "../../other/template/BasicTemplate";
 import { DelegatedConfigReferenceNode } from "../../other/node/DelegatedConfigReferenceNode";
 import { WebhookServerConfigNode } from "../node/WebhookServerConfigNode";
 import { WebhookServerService } from "../service/WebhookServerService";
@@ -28,7 +29,7 @@ export type ReverseproxyConnection = {
 @TemplateDescription({
     name: "webhook",
     templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "WebhookTemplate.html",
-    dependencies: [DelegatedConfigReferenceNode, WebhookServerConfigNode, WebhookServerService],
+    dependencies: [BasicTemplate, DelegatedConfigReferenceNode, WebhookServerConfigNode, WebhookServerService],
 })
 export class WebhookTemplate extends Template {
 }

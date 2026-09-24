@@ -63,7 +63,7 @@
     .towb_editorlabel {
         width: 120px !important;
     }
-    input.towb_editorfield, select.towb_editorfield, textarea.towb_editorfield {
+    input.towb_editorfield, select.towb_editorfield, textarea.towb_editorfield, .red-ui-typedInput-container {
         width: 70% !important;
     }
     input.towb_editorfield_short, select.towb_editorfield_short {
@@ -86,5 +86,22 @@
     .node_label_black { fill: black; }
 </style>
 
+<script type="text/javascript">
+    // Eagerly register DelegatedConfigReferenceNode so that Node-RED's
+    // updateConfigNodeUsers() can resolve defaults with
+    // type:"DelegatedConfigReferenceNode" for reference counting.
+    // This avoids a race condition during live install where the deferred
+    // registration in Plugins.html may not have executed yet.
+    if (!RED.nodes.getType('DelegatedConfigReferenceNode')) {
+        RED.nodes.registerType('DelegatedConfigReferenceNode', {
+            category: 'config',
+            defaults: {},
+            oneditprepare: function() {},
+            oneditsave: function() {},
+            oneditcancel: function() {},
+            oneditdelete: function() {},
+        });
+    }
+</script>
 
 </div>
