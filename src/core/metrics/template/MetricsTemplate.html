@@ -128,13 +128,26 @@
         }
     });
 
+    let _metricsNodeAddHandler = function(addedNode) {
+        getMetricsProviderTypes().then(function(types) {
+            let typeIds = types.map(function(t) { return t.id; });
+            if (typeIds.indexOf(addedNode.type) < 0) return;
+            updateMetricsSelectorList().then(() => {
+                metricsSelector.val(addedNode.id);
+                metricsSelector.trigger('change');
+            });
+        });
+    };
+    RED.events.on('nodes:add', _metricsNodeAddHandler);
+    metricsSelector.data('nodeAddHandler', _metricsNodeAddHandler);
+
     // Show the metrics section only if at least one metrics provider type is registered.
     // If nodered_prometheus (or any other provider) is not installed, the section stays hidden.
     getMetricsProviderTypes().then(providerTypes => {
         if (providerTypes.length === 0) return;
         metricsSection.show();
         updateMetricsSelectorList().then(() => {
-            metricsSelector.val(node.metricsReference);
+            metricsSelector.val(node.metricsReference || '_ADD_');
             metricsSelector.trigger('change');
         });
     });
@@ -142,6 +155,12 @@
 
 <script type="text/javascript" template-section="onIncludeEditSave">
     node = this;
+
+    var _metAddHandler = $("#metrics-selector").data('nodeAddHandler');
+    if (_metAddHandler) {
+        RED.events.off('nodes:add', _metAddHandler);
+        $("#metrics-selector").data('nodeAddHandler', null);
+    }
 
     // ── HERE BE DRAGONS — see LoggerTemplate.html for full explanation ──
     var _metOldRef = node.metricsReference;
@@ -169,6 +188,14 @@
 
     if (templateConfig.showEnable === false) {
         node.metricsEnabled = !!node.metricsReference;
+    }
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditCancel">
+    var _metAddHandler = $("#metrics-selector").data('nodeAddHandler');
+    if (_metAddHandler) {
+        RED.events.off('nodes:add', _metAddHandler);
+        $("#metrics-selector").data('nodeAddHandler', null);
     }
 </script>
 
