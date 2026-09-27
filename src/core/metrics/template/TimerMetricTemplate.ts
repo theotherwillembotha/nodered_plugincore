@@ -4,8 +4,6 @@ import { TemplateDescription } from "../../tagging/TemplateDescriptionDecorator"
 import { BasicTemplate } from "../../other/template/BasicTemplate";
 import { MetricsService, MetricsReference } from "../service/MetricsService";
 import { DelegatedConfigReferenceNode } from "../../other/node/DelegatedConfigReferenceNode";
-import { ConfigFragmentTemplate } from "../../configfragment/template/ConfigFragmentTemplate";
-
 export interface TimerMetricTemplateConfig extends BaseNodeConfig, MetricsReference {
     resetOnDeploy: boolean;
     providerConfig: any;
@@ -14,7 +12,7 @@ export interface TimerMetricTemplateConfig extends BaseNodeConfig, MetricsRefere
 @TemplateDescription({
     name: "timermetric",
     templateFile: SourceUtility.getSourcePath("/build/", "/src/") + "TimerMetricTemplate.html",
-    dependencies: [BasicTemplate, DelegatedConfigReferenceNode, MetricsService, ConfigFragmentTemplate],
+    dependencies: [BasicTemplate, DelegatedConfigReferenceNode, MetricsService],
 })
 export class TimerMetricTemplate extends Template {
 }

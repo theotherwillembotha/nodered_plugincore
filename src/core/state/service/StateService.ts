@@ -28,11 +28,13 @@ export class DoNothingStateHandle implements StateHandle {
 //                   Global Store Keys                     //
 // ******************************************************* //
 
-const _GLOBAL_STATE_MEMORY_KEY    = '__plugincore_internalstate_memory__';
-const _GLOBAL_STATE_SUBS_KEY      = '__plugincore_internalstate_subscribers__';
-const _GLOBAL_STATE_FACTORIES_KEY = '__plugincore_state_factories__';
-const _GLOBAL_STATE_CONFIG_KEY    = '__plugincore_state_config__';
-const _GLOBAL_STATE_USERDIR_KEY   = '__plugincore_state_userDir__';
+const _GLOBAL_STATE_MEMORY_KEY         = '__plugincore_internalstate_memory__';
+const _GLOBAL_STATE_SUBS_KEY           = '__plugincore_internalstate_subscribers__';
+const _GLOBAL_STATE_FACTORIES_KEY      = '__plugincore_state_factories__';
+const _GLOBAL_STATE_TYPE_FACTORIES_KEY = '__plugincore_state_type_factories__';
+const _GLOBAL_STATE_CONFIG_KEY         = '__plugincore_state_config__';
+const _GLOBAL_STATE_USERDIR_KEY        = '__plugincore_state_userDir__';
+const _GLOBAL_STATE_RED_KEY            = '__plugincore_state_red__';
 
 function getMemoryStore(): Map<string, string> {
     if (!(global as any)[_GLOBAL_STATE_MEMORY_KEY]) (global as any)[_GLOBAL_STATE_MEMORY_KEY] = new Map();
@@ -47,6 +49,11 @@ function getSubscriberStore(): Map<string, Set<(s: string) => void>> {
 function getFactoryStore(): Map<string, () => StateHandle> {
     if (!(global as any)[_GLOBAL_STATE_FACTORIES_KEY]) (global as any)[_GLOBAL_STATE_FACTORIES_KEY] = new Map();
     return (global as any)[_GLOBAL_STATE_FACTORIES_KEY];
+}
+
+function getTypeFactoryStore(): Map<string, (ownerId: string, config: any, providerRef: string) => StateHandle> {
+    if (!(global as any)[_GLOBAL_STATE_TYPE_FACTORIES_KEY]) (global as any)[_GLOBAL_STATE_TYPE_FACTORIES_KEY] = new Map();
+    return (global as any)[_GLOBAL_STATE_TYPE_FACTORIES_KEY];
 }
 
 function getConfigStore(): Map<string, { survivesRedeploy: boolean; survivesRestart: boolean }> {
@@ -82,6 +89,7 @@ export class StateService extends BaseService {
 
     public init(red: NodeAPI<NodeAPISettingsWithData>): void {
         (global as any)[_GLOBAL_STATE_USERDIR_KEY] = (red.settings as any).userDir;
+        (global as any)[_GLOBAL_STATE_RED_KEY] = red;
     }
 
     public deinit(_red: NodeAPI<NodeAPISettingsWithData>): void {}
@@ -120,12 +128,29 @@ export class StateService extends BaseService {
         getConfigStore().set(nodeId, config);
     }
 
+    // ---- Type-based factory registration (called by provider modules at load time) ----
+
+    public static registerTypeFactory(typeName: string, factory: (ownerId: string, config: any, providerRef: string) => StateHandle): void {
+        getTypeFactoryStore().set(typeName, factory);
+    }
+
     // ---- Handle creation (called by consumer nodes) ----
 
     public static createHandle(stateReference: string): StateHandle {
         if (!stateReference) return new DoNothingStateHandle();
         const factory = getFactoryStore().get(stateReference);
         return factory ? factory() : new DoNothingStateHandle();
+    }
+
+    public static createHandleFromRef(stateReference: string, providerConfig: any, ownerId: string): StateHandle {
+        if (!stateReference) return new DoNothingStateHandle();
+        const red = (global as any)[_GLOBAL_STATE_RED_KEY];
+        if (!red) return new DoNothingStateHandle();
+        const providerNode = red.nodes.getNode(stateReference);
+        if (!providerNode) return new DoNothingStateHandle();
+        const providerType = (providerNode as any).type;
+        const factory = getTypeFactoryStore().get(providerType);
+        return factory ? factory(ownerId, providerConfig || {}, stateReference) : new DoNothingStateHandle();
     }
 
     // ---- Memory store (used by InternalStateHandle) ----

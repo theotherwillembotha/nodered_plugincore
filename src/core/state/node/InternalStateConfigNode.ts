@@ -4,11 +4,7 @@ import { NodeDescription } from "../../tagging/NodeDescriptionDecorator";
 import { SourceUtility } from "../../NodeGenerator";
 import { StateService, StateHandle } from "../service/StateService";
 import { StateConfigNode } from "./StateConfigNode";
-
-interface InternalStateConfigNodeConfig extends ConfigNodeConfig {
-    survivesRedeploy: boolean;
-    survivesRestart: boolean;
-}
+import { ConfigFragmentService } from "../../configfragment/service/ConfigFragmentService";
 
 class InternalStateHandle implements StateHandle {
     private _nodeId: string;
@@ -78,25 +74,70 @@ class InternalStateHandle implements StateHandle {
     tags: ["StateProvider"]
 })
 export class InternalStateConfigNode extends StateConfigNode {
-    private _survivesRedeploy: boolean;
-    private _survivesRestart: boolean;
 
-    constructor(node: Node, config: InternalStateConfigNodeConfig) {
+    constructor(node: Node, config: ConfigNodeConfig) {
         super(node, config);
-        this._survivesRedeploy = config.survivesRedeploy ?? false;
-        this._survivesRestart  = config.survivesRestart  ?? false;
-
-        StateService.registerConfig(config.id, {
-            survivesRedeploy: this._survivesRedeploy,
-            survivesRestart:  this._survivesRestart,
-        });
     }
 
     public createHandle(): StateHandle {
-        return new InternalStateHandle(
-            this.id(),
-            this._survivesRedeploy,
-            this._survivesRestart
-        );
+        return new InternalStateHandle(this.id(), false, false);
     }
 }
+
+// ── Type-based factory (for fragment-based StateTemplate v0.4.5+) ──
+
+StateService.registerTypeFactory("InternalStateConfigNode", (ownerId: string, config: any, _providerRef: string) => {
+    const survivesRedeploy = config.survivesRedeploy ?? false;
+    const survivesRestart  = config.survivesRestart  ?? false;
+    StateService.registerConfig(ownerId, { survivesRedeploy, survivesRestart });
+    return new InternalStateHandle(ownerId, survivesRedeploy, survivesRestart);
+});
+
+// ── ConfigFragment registration ──
+
+const INTERNAL_STATE_FRAGMENT_HTML = `
+<script type="application/json" fragment-section="metaData">
+{ "label": "Persistence" }
+</script>
+
+<script type="text/html" fragment-section="onForm">
+    <div class="form-row nomargin">
+        <label class="towb_editorlabel">&nbsp;</label>
+        <input class="towb_checkbox" type="checkbox" id="fragment-survivesRedeploy" />
+        <label class="towb_checkboxlabel" for="fragment-survivesRedeploy">Survives redeploy</label>
+    </div>
+    <div class="form-row nomargin">
+        <label class="towb_editorlabel">&nbsp;</label>
+        <input class="towb_checkbox" type="checkbox" id="fragment-survivesRestart" />
+        <label class="towb_checkboxlabel" for="fragment-survivesRestart">Survives restart <span style="color:#aaa; font-size:0.85em;">(also writes to disk)</span></label>
+    </div>
+</script>
+
+<script type="text/javascript" fragment-section="onLoad">
+    var $c = $(container);
+    $c.find("#fragment-survivesRedeploy").prop("checked", config.survivesRedeploy || false);
+    $c.find("#fragment-survivesRestart").prop("checked", config.survivesRestart || false);
+
+    $c.find("#fragment-survivesRestart").on("change", function() {
+        if ($(this).prop("checked")) {
+            $c.find("#fragment-survivesRedeploy").prop("checked", true).prop("disabled", true);
+        } else {
+            $c.find("#fragment-survivesRedeploy").prop("disabled", false);
+        }
+    }).trigger("change");
+</script>
+
+<script type="text/javascript" fragment-section="onSave">
+    var $c = $(container);
+    return {
+        survivesRedeploy: $c.find("#fragment-survivesRedeploy").prop("checked"),
+        survivesRestart:  $c.find("#fragment-survivesRestart").prop("checked")
+    };
+</script>
+`;
+
+ConfigFragmentService.registerFragment({
+    section: 'StateConfig',
+    providerType: 'InternalStateConfigNode',
+    html: INTERNAL_STATE_FRAGMENT_HTML,
+});
