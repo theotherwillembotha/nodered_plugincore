@@ -646,11 +646,30 @@ export class NodeBuilder {
         return getBeautify().html_beautify(`
         <script type="text/javascript">
         (function () {
+            var _registered = false;
+            var _typeBody = ${registerTypeBody};
+            function _doRegister() {
+                if (_registered) return;
+                _registered = true;
+                RED.nodes.registerType('${this._name}', _typeBody);
+            }
             RED.events.on('registry:node-set-added', function (ns) {
                 if (ns.types && ns.types.indexOf('${this._name}') !== -1) {
-                    RED.nodes.registerType('${this._name}', ${registerTypeBody});
+                    _doRegister();
                 }
             });
+            // Fallback for runtime install: the node-set-added event may have
+            // fired before this HTML was loaded. Check if the type already
+            // exists in the registry and register immediately if so.
+            try {
+                var _allSets = RED.nodes.registry.getNodeList();
+                for (var _i = 0; _i < _allSets.length; _i++) {
+                    if (_allSets[_i].types && _allSets[_i].types.indexOf('${this._name}') !== -1) {
+                        _doRegister();
+                        break;
+                    }
+                }
+            } catch(_e) {}
         }());
         </script>`, beautifyOptions);
     }
