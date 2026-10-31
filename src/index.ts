@@ -48,6 +48,14 @@ export * from "./core/webhook/service/WebhookServerService";
 // REVERSE PROXY
 export * from "./core/webhook/service/ReverseProxyTypeService";
 
+// REGISTRY
+export * from "./core/registry/service/ProviderRegistry";
+
+// TEMPLATING
+export * from "./core/templating/service/TemplatingService";
+export * from "./core/templating/template/TemplatingTemplate";
+export * from "./core/templating/TemplatingNode";
+
 // DECORATORS
 export * from "./core/logger/LoggerDecorator";
 export * from "./core/metrics/MetricsDecorator";

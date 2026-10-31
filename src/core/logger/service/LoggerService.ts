@@ -4,9 +4,7 @@ import {BaseService, ConfigNodeConfig, ConfigNode } from "../../NodeConstructor"
 import { ServiceDescription } from "../../tagging/ServiceDescriptionDecorator";
 import { NodeAPI, NodeAPISettingsWithData, Node } from "node-red";
 import { LoggerTemplate, LoggerTemplateConfig } from "../template/LoggerTemplate";
-
-// Build-time / optional runtime deps - lazy so they are never required at bundle load time.
-function getHandlebars(): any { return require('handlebars'); }
+import { TemplatingService } from "../../templating/service/TemplatingService";
 
 function getLocalIpAddress(): string {
     const interfaces = os.networkInterfaces();
@@ -18,17 +16,6 @@ function getLocalIpAddress(): string {
         }
     }
     return '127.0.0.1';
-}
-
-let _helpersRegistered = false;
-function ensureHelpersRegistered(): void {
-    if (_helpersRegistered) return;
-    _helpersRegistered = true;
-    // helper for serializing json objects inside handlebars tags.
-    // you can then convert it like this: {{{json myobject}}}
-    getHandlebars().registerHelper('json', function(context: any) {
-        return JSON.stringify(context);
-    });
 }
 
 export enum Level{
@@ -61,7 +48,6 @@ export type TagMap = {
 export abstract class Log  {
     private _config: LoggerTemplateConfig;
     private _templateStr: string;
-    private _compiledTemplate: any = null;
     private tags:TagMap;
 
     protected constructor(config:LoggerTemplateConfig){
@@ -76,24 +62,21 @@ export abstract class Log  {
         }
     }
 
-    private getTemplate(): any {
-        if (!this._compiledTemplate) {
-            ensureHelpersRegistered();
-            this._compiledTemplate = getHandlebars().compile(this._templateStr);
-        }
-        return this._compiledTemplate;
-    }
-
     protected config():LoggerTemplateConfig{
         return this._config;
     }
 
     public log(payload:{[key:string]:any}|string):void{
         try{
-            // step 1. serialize the payload using the template engine.
-            let message = (payload instanceof String) ? payload as string : this.getTemplate()({msg:payload});
-
-            // step 2. write to the log appender.
+            let message: string;
+            if (payload instanceof String || typeof payload === 'string') {
+                message = payload as string;
+            } else {
+                const provider = TemplatingService.get(
+                    this._config.logTemplateProvider || 'HandlebarsTemplatingProvider'
+                );
+                message = provider.evaluate(this._templateStr, { msg: payload });
+            }
             this.writeToLog(this.config().level, message, this.tags);
         }
         catch(e){
@@ -195,7 +178,7 @@ export class DoNothingAppender extends Log{
     }
 
     private constructor(){
-        super({flow:"",id:"", level:"", name:"", template:"", type:""});
+        super({flow:"",id:"", level:"", name:"", template:"", type:"", logTemplateProvider:"HandlebarsTemplatingProvider"});
     }
 
     public log(payload:{[key:string]:any}|string):void{

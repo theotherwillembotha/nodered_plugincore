@@ -1,0 +1,163 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("templatingProvider", { value:"MustacheTemplatingProvider", required:true })
+        .addDefault("templateContent", { value:"", required:true })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+
+    var _getTemplatingProviders = function() {
+        return $.ajax({
+            url: "providerregistry/find?type=TemplatingProvider",
+            type: "GET",
+            contentType: "application/json; charset=utf-8"
+        });
+    };
+
+    // ── Handlebars Ace editor — lazy init ────────────────────────────────────
+    // Ace measures the container at creation time. It must be visible (non-zero
+    // dimensions) before createEditor() is called, otherwise getValue() always
+    // returns ''. We therefore create the editor only at the moment we first
+    // make the Handlebars div visible, and resize it immediately after.
+
+    var _ensureHbsEditor = function(initialContent) {
+        if (node._hbsEditor) return;
+        node._hbsEditor = RED.editor.createEditor({
+            id: 'tmpl-content-handlebars-ace',
+            mode: 'ace/mode/handlebars',
+            value: initialContent || ''
+        });
+        // Force a layout pass so Ace knows its real dimensions.
+        setTimeout(function() { if (node._hbsEditor) node._hbsEditor.resize(); }, 0);
+    };
+
+    // ── editor switching ─────────────────────────────────────────────────────
+
+    var _showEditorForProvider = function(providerId, contentOverride) {
+        // Capture content from whichever editor is currently active.
+        var currentContent;
+        if ($("#tmpl-editor-handlebars").is(":visible") && node._hbsEditor) {
+            currentContent = node._hbsEditor.getValue();
+        } else {
+            currentContent = $("#tmpl-content-mustache").val() || '';
+        }
+        var content = (contentOverride !== undefined) ? contentOverride : currentContent;
+
+        if (providerId === 'HandlebarsTemplatingProvider') {
+            $("#tmpl-editor-mustache").hide();
+            $("#tmpl-editor-handlebars").show();
+            // Init now that the div is visible, then set the content.
+            _ensureHbsEditor(content);
+            if (node._hbsEditor) {
+                node._hbsEditor.setValue(content, -1);
+                node._hbsEditor.clearSelection();
+            }
+        } else {
+            if (node._hbsEditor) {
+                currentContent = node._hbsEditor.getValue();
+            }
+            $("#tmpl-editor-handlebars").hide();
+            $("#tmpl-editor-mustache").show();
+            $("#tmpl-content-mustache").val(content);
+        }
+    };
+
+    // ── provider dropdown ────────────────────────────────────────────────────
+
+    var _populateProviders = function(providers, selectedId) {
+        var $sel = $("#tmpl-provider-select");
+        $sel.empty();
+        providers.forEach(function(p) {
+            $('<option>').val(p.id).text(p.name).appendTo($sel);
+        });
+        $sel.val(selectedId || 'MustacheTemplatingProvider');
+    };
+
+    $("#tmpl-provider-select").on('change', function() {
+        _showEditorForProvider($(this).val());
+    });
+
+    // ── initialise ───────────────────────────────────────────────────────────
+
+    var _savedProvider = node.templatingProvider || 'MustacheTemplatingProvider';
+    var _savedContent  = node.templateContent    || '';
+
+    _getTemplatingProviders().then(function(providers) {
+        _populateProviders(providers, _savedProvider);
+        // Pass the saved content as contentOverride so we don't accidentally
+        // read from an editor that hasn't been seeded yet.
+        _showEditorForProvider(_savedProvider, _savedContent);
+    });
+
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+    var _tmplProvider = $("#tmpl-provider-select").val() || 'MustacheTemplatingProvider';
+    node.templatingProvider = _tmplProvider;
+
+    if (_tmplProvider === 'HandlebarsTemplatingProvider' && node._hbsEditor) {
+        node.templateContent = node._hbsEditor.getValue();
+    } else {
+        node.templateContent = $("#tmpl-content-mustache").val() || '';
+    }
+
+    if (node._hbsEditor) {
+        node._hbsEditor.destroy();
+        delete node._hbsEditor;
+    }
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditCancel">
+    if (node._hbsEditor) {
+        node._hbsEditor.destroy();
+        delete node._hbsEditor;
+    }
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row editorsectionheading">
+        <i class="w-16 fa fa-file-text-o"></i> <span>Template</span>
+    </div>
+    <div class="editorgroupborder">
+        <div class="form-row nomargin">
+            <label class="towb_editorlabel" for="tmpl-provider-select">Engine</label>
+            <select id="tmpl-provider-select" style="width:70%;">
+                <option value="MustacheTemplatingProvider">Mustache (built-in)</option>
+            </select>
+        </div>
+
+        <!-- Mustache: plain textarea -->
+        <div id="tmpl-editor-mustache" style="display:none;">
+            <div class="form-row nomargin">
+                <label style="width:100%;"><i class="fa fa-code"></i> Content</label>
+            </div>
+            <div class="form-row">
+                <textarea id="tmpl-content-mustache" rows="10"
+                    style="width:100%; font-family:monospace; font-size:12px; resize:vertical; box-sizing:border-box;"
+                    placeholder="Hello {{name}}!"></textarea>
+            </div>
+        </div>
+
+        <!-- Handlebars: Ace editor -->
+        <div id="tmpl-editor-handlebars" style="display:none;">
+            <div class="form-row nomargin">
+                <label style="width:100%;"><i class="fa fa-code"></i> Content</label>
+            </div>
+            <div class="form-row">
+                <div style="width:100%; height:250px; min-height:150px;" class="node-text-editor" id="tmpl-content-handlebars-ace"></div>
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### Template
+: *engine*  (select) : The templating engine to use. **Mustache** (built-in) is always available. Additional engines appear when their provider package is installed.
+: *content* (text)   : The template string. The full incoming `msg` object is available as the template context.
+
+#### Mustache syntax
+Use `{{property}}` to insert a value and `{{#list}}…{{/list}}` for iteration. See the [Mustache manual](https://mustache.github.io/mustache.5.html).
+
+#### Handlebars syntax (deprecated — removed in 0.6.0)
+Superset of Mustache. Use `{{json value}}` to serialise an object to JSON inline.
+</script>
