@@ -31,6 +31,7 @@
         .addDefault("loggerReference", { required:false, value:'', type:"DelegatedConfigReferenceNode"})
         .addDefault("logTemplateOverrideEnabled",  {value:false})
         .addDefault("logTemplateOverride", {value:"message:{{msg}}"})
+        .addDefault("logTemplateProvider", {value:"HandlebarsTemplatingProvider", required:false})
 </script>
 
 <script type="text/javascript" template-section="onIncludeEditPrepare">
@@ -99,6 +100,10 @@
         if(logTemplateEnabled.prop("checked")){
             logTemplateEnabledSection.show();
             node._def.defaults.logTemplateOverride.required = true;
+            // Show the currently selected editor now that the section is visible.
+            var currentProvider = $("#log-tmpl-provider-select").val() || 'HandlebarsTemplatingProvider';
+            var currentContent  = $("#log-tmpl-content-mustache").val() || 'message:{{msg}}';
+            _showLogTemplateEditorForProvider(currentProvider, currentContent);
         }
         else{
             logTemplateEnabledSection.hide()
@@ -106,10 +111,74 @@
         }
     });
 
-    node.logTemplateOverrideEditor = RED.editor.createEditor({
-        id: 'node-input-logTemplateOverrideEditor',
-        mode: 'ace/mode/handlebars',
-        value: node.logTemplateOverride
+    // ── Template override — provider selector + lazy-init editors ──────────
+
+    var _getLogTemplateProviders = function() {
+        return $.ajax({
+            url: "providerregistry/find?type=TemplatingProvider",
+            type: "GET",
+            contentType: "application/json; charset=utf-8"
+        });
+    };
+
+    var _ensureLogHbsEditor = function(initialContent) {
+        if (node._logHbsEditor) return;
+        node._logHbsEditor = RED.editor.createEditor({
+            id: 'log-tmpl-content-handlebars-ace',
+            mode: 'ace/mode/handlebars',
+            value: initialContent || ''
+        });
+        setTimeout(function() { if (node._logHbsEditor) node._logHbsEditor.resize(); }, 0);
+    };
+
+    var _showLogTemplateEditorForProvider = function(providerId, contentOverride) {
+        var currentContent;
+        if ($("#log-tmpl-editor-handlebars").is(":visible") && node._logHbsEditor) {
+            currentContent = node._logHbsEditor.getValue();
+        } else {
+            currentContent = $("#log-tmpl-content-mustache").val() || '';
+        }
+        var content = (contentOverride !== undefined) ? contentOverride : currentContent;
+
+        if (providerId === 'HandlebarsTemplatingProvider') {
+            $("#log-tmpl-editor-mustache").hide();
+            $("#log-tmpl-editor-handlebars").show();
+            _ensureLogHbsEditor(content);
+            if (node._logHbsEditor) {
+                node._logHbsEditor.setValue(content, -1);
+                node._logHbsEditor.clearSelection();
+            }
+        } else {
+            $("#log-tmpl-editor-handlebars").hide();
+            $("#log-tmpl-editor-mustache").show();
+            $("#log-tmpl-content-mustache").val(content);
+        }
+    };
+
+    var _populateLogTemplateProviders = function(providers, selectedId) {
+        var $sel = $("#log-tmpl-provider-select");
+        $sel.empty();
+        providers.forEach(function(p) {
+            $('<option>').val(p.id).text(p.name).appendTo($sel);
+        });
+        $sel.val(selectedId || 'HandlebarsTemplatingProvider');
+    };
+
+    $("#log-tmpl-provider-select").on('change', function() {
+        _showLogTemplateEditorForProvider($(this).val());
+    });
+
+    var _savedLogProvider = node.logTemplateProvider || 'HandlebarsTemplatingProvider';
+    var _savedLogContent  = node.logTemplateOverride  || 'message:{{msg}}';
+
+    _getLogTemplateProviders().then(function(providers) {
+        _populateLogTemplateProviders(providers, _savedLogProvider);
+        if (logTemplateEnabled.prop("checked")) {
+            _showLogTemplateEditorForProvider(_savedLogProvider, _savedLogContent);
+        } else {
+            // Pre-seed content without showing, so switching on the override later shows correct content.
+            $("#log-tmpl-content-mustache").val(_savedLogContent);
+        }
     });
 
     let loggerSelector = $("#logger-selector");
@@ -267,9 +336,17 @@
     }
     node.loggerReference = _logNewRef;
 
-    node.logTemplateOverride = node.logTemplateOverrideEditor.getValue();
-    node.logTemplateOverrideEditor.destroy();
-    delete node.logTemplateOverrideEditor;
+    var _logTmplProvider = $("#log-tmpl-provider-select").val() || 'HandlebarsTemplatingProvider';
+    node.logTemplateProvider = _logTmplProvider;
+    if (_logTmplProvider === 'HandlebarsTemplatingProvider' && node._logHbsEditor) {
+        node.logTemplateOverride = node._logHbsEditor.getValue();
+    } else {
+        node.logTemplateOverride = $("#log-tmpl-content-mustache").val() || 'message:{{msg}}';
+    }
+    if (node._logHbsEditor) {
+        node._logHbsEditor.destroy();
+        delete node._logHbsEditor;
+    }
 </script>
 
 <script type="text/javascript" template-section="onIncludeEditCancel">
@@ -280,8 +357,10 @@
         $("#logger-selector").data('nodeAddHandler', null);
     }
 
-    node.logTemplateOverrideEditor.destroy();
-    delete node.logTemplateOverrideEditor;
+    if (node._logHbsEditor) {
+        node._logHbsEditor.destroy();
+        delete node._logHbsEditor;
+    }
 </script>
 
 <script type="text/html" template-section="onIncludeEditForm">
@@ -330,9 +409,33 @@
                 </div>
 
                 <div id="section_logTemplateOverrideEnabled">
-                    <div class="form-row">
-                        <label class="towb_editorlabel" for="node-input-logTemplateOverrideEditor"><i class="fa fa-code"></i> Template</label>
-                        <div style="height: 250px; min-height:150px;" class="node-text-editor" id="node-input-logTemplateOverrideEditor"></div>
+                    <div class="form-row nomargin">
+                        <label class="towb_editorlabel" for="log-tmpl-provider-select">Engine</label>
+                        <select id="log-tmpl-provider-select" style="width:70%;">
+                            <option value="HandlebarsTemplatingProvider">Handlebars (deprecated)</option>
+                        </select>
+                    </div>
+
+                    <!-- Mustache: plain textarea -->
+                    <div id="log-tmpl-editor-mustache" style="display:none;">
+                        <div class="form-row nomargin">
+                            <label style="width:100%;"><i class="fa fa-code"></i> Template</label>
+                        </div>
+                        <div class="form-row">
+                            <textarea id="log-tmpl-content-mustache" rows="8"
+                                style="width:100%; font-family:monospace; font-size:12px; resize:vertical; box-sizing:border-box;"
+                                placeholder="message:{{msg}}"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Handlebars: Ace editor -->
+                    <div id="log-tmpl-editor-handlebars" style="display:none;">
+                        <div class="form-row nomargin">
+                            <label style="width:100%;"><i class="fa fa-code"></i> Template</label>
+                        </div>
+                        <div class="form-row">
+                            <div style="width:100%; height:200px; min-height:100px;" class="node-text-editor" id="log-tmpl-content-handlebars-ace"></div>
+                        </div>
                     </div>
                 </div>
             </div>

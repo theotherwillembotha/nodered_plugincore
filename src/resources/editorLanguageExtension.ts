@@ -9,6 +9,12 @@ class ScriptEditorLanguageManager {
         let langName = "js_variant_" + ScriptEditorLanguageManager.counter;
         ScriptEditorLanguageManager.counter++;
 
+        // NR 4.x (Monaco <0.52): typescript service lives at monaco.languages.typescript
+        // NR 5.x (Monaco ≥0.52): typescript service moved to monaco.typescript
+        // CompletionItemKind similarly moved from monaco.languages.CompletionItemKind to monaco.CompletionItemKind
+        const monacoTs:any          = monaco.typescript          || monaco.languages.typescript;
+        const CompletionItemKind:any = monaco.CompletionItemKind  || monaco.languages.CompletionItemKind;
+
         // Get the JavaScript language configuration
         let jsLangConfig = monaco.languages.getLanguages().find((lang:{ id:string }) => lang.id === 'javascript');
 
@@ -18,16 +24,16 @@ class ScriptEditorLanguageManager {
             monaco.languages.register({ id: langName });
             monaco.languages.setLanguageConfiguration(langName, implementation.conf);
             monaco.languages.setMonarchTokensProvider(langName, implementation.language);
-            
+
             // Configure to allow top-level returns (function body context)
-            monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+            monacoTs.javascriptDefaults.setDiagnosticsOptions({
                 noSemanticValidation: false,
                 noSyntaxValidation: false,
                 diagnosticCodesToIgnore: [1108] // Allow return outside function
             });
-            
-            monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-                target: monaco.languages.typescript.ScriptTarget.ESNext,
+
+            monacoTs.javascriptDefaults.setCompilerOptions({
+                target: monacoTs.ScriptTarget.ESNext,
                 allowNonTsExtensions: true,
                 allowJs: true,
                 checkJs: true,
@@ -76,40 +82,40 @@ class ScriptEditorLanguageManager {
 
             function convertKind(tsKind:string) {
                 const kindString = tsKind;
-            
+
                 // Map TypeScript ScriptElementKind to Monaco CompletionItemKind
                 const kindMap:{[key:string]:number} = {
-                    'method': monaco.languages.CompletionItemKind.Method,
-                    'function': monaco.languages.CompletionItemKind.Function,
-                    'constructor': monaco.languages.CompletionItemKind.Constructor,
-                    'field': monaco.languages.CompletionItemKind.Field,
-                    'variable': monaco.languages.CompletionItemKind.Variable,
-                    'class': monaco.languages.CompletionItemKind.Class,
-                    'interface': monaco.languages.CompletionItemKind.Interface,
-                    'module': monaco.languages.CompletionItemKind.Module,
-                    'property': monaco.languages.CompletionItemKind.Property,
-                    'unit': monaco.languages.CompletionItemKind.Unit,
-                    'value': monaco.languages.CompletionItemKind.Value,
-                    'enum': monaco.languages.CompletionItemKind.Enum,
-                    'keyword': monaco.languages.CompletionItemKind.Keyword,
-                    'snippet': monaco.languages.CompletionItemKind.Snippet,
-                    'text': monaco.languages.CompletionItemKind.Text,
-                    'color': monaco.languages.CompletionItemKind.Color,
-                    'file': monaco.languages.CompletionItemKind.File,
-                    'reference': monaco.languages.CompletionItemKind.Reference,
-                    'folder': monaco.languages.CompletionItemKind.Folder,
-                    'enum member': monaco.languages.CompletionItemKind.EnumMember,
-                    'constant': monaco.languages.CompletionItemKind.Constant,
-                    'struct': monaco.languages.CompletionItemKind.Struct,
-                    'event': monaco.languages.CompletionItemKind.Event,
-                    'operator': monaco.languages.CompletionItemKind.Operator,
-                    'type parameter': monaco.languages.CompletionItemKind.TypeParameter,
-                    'var': monaco.languages.CompletionItemKind.Variable,
-                    'const': monaco.languages.CompletionItemKind.Variable,
-                    'let': monaco.languages.CompletionItemKind.Variable
+                    'method': CompletionItemKind.Method,
+                    'function': CompletionItemKind.Function,
+                    'constructor': CompletionItemKind.Constructor,
+                    'field': CompletionItemKind.Field,
+                    'variable': CompletionItemKind.Variable,
+                    'class': CompletionItemKind.Class,
+                    'interface': CompletionItemKind.Interface,
+                    'module': CompletionItemKind.Module,
+                    'property': CompletionItemKind.Property,
+                    'unit': CompletionItemKind.Unit,
+                    'value': CompletionItemKind.Value,
+                    'enum': CompletionItemKind.Enum,
+                    'keyword': CompletionItemKind.Keyword,
+                    'snippet': CompletionItemKind.Snippet,
+                    'text': CompletionItemKind.Text,
+                    'color': CompletionItemKind.Color,
+                    'file': CompletionItemKind.File,
+                    'reference': CompletionItemKind.Reference,
+                    'folder': CompletionItemKind.Folder,
+                    'enum member': CompletionItemKind.EnumMember,
+                    'constant': CompletionItemKind.Constant,
+                    'struct': CompletionItemKind.Struct,
+                    'event': CompletionItemKind.Event,
+                    'operator': CompletionItemKind.Operator,
+                    'type parameter': CompletionItemKind.TypeParameter,
+                    'var': CompletionItemKind.Variable,
+                    'const': CompletionItemKind.Variable,
+                    'let': CompletionItemKind.Variable
                 };
-                
-                return kindMap[kindString] || monaco.languages.CompletionItemKind.Property;
+
+                return kindMap[kindString] || CompletionItemKind.Property;
             }
 
             // Filter function with duplicate handling
@@ -195,9 +201,9 @@ class ScriptEditorLanguageManager {
                 const jsModel = monaco.editor.createModel(wrappedCode, 'javascript');
                 
                 try {
-                    const getWorker = await monaco.languages.typescript.getJavaScriptWorker();
+                    const getWorker = await monacoTs.getJavaScriptWorker();
                     const client = await getWorker(jsModel.uri);
-                    
+
                     const syntacticDiagnostics = await client.getSyntacticDiagnostics(jsModel.uri.toString());
                     const semanticDiagnostics = await client.getSemanticDiagnostics(jsModel.uri.toString());
                     
@@ -263,9 +269,9 @@ class ScriptEditorLanguageManager {
                 const jsModel = monaco.editor.createModel(wrappedCode, 'javascript');
                 
                 try {
-                    const getWorker = await monaco.languages.typescript.getJavaScriptWorker();
+                    const getWorker = await monacoTs.getJavaScriptWorker();
                     const client = await getWorker(jsModel.uri);
-                    
+
                     const completions = await client.getCompletionsAtPosition(
                         jsModel.uri.toString(),
                         wrappedOffset
@@ -348,9 +354,9 @@ class ScriptEditorLanguageManager {
                 const jsModel = monaco.editor.createModel(wrappedCode, 'javascript');
 
                 try {
-                    const getWorker = await monaco.languages.typescript.getJavaScriptWorker();
+                    const getWorker = await monacoTs.getJavaScriptWorker();
                     const client = await getWorker(jsModel.uri);
-      
+
                     const quickInfo = await client.getQuickInfoAtPosition(
                         jsModel.uri.toString(),
                         wrappedOffset

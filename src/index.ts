@@ -48,6 +48,21 @@ export * from "./core/webhook/service/WebhookServerService";
 // REVERSE PROXY
 export * from "./core/webhook/service/ReverseProxyTypeService";
 
+// REGISTRY
+export * from "./core/registry/service/ProviderRegistry";
+
+// TEMPLATING
+export * from "./core/templating/service/TemplatingService";
+export * from "./core/templating/template/TemplatingTemplate";
+export * from "./core/templating/TemplatingNode";
+
+// SECRETS
+export * from "./core/secrets/service/SecretsService";
+export * from "./core/secrets/node/SecretProviderConfigNode";
+export * from "./core/secrets/node/HushHushSecretProviderConfigNode";
+export * from "./core/secrets/template/SecretsTemplate";
+export * from "./core/secrets/SecretsLookupNode";
+
 // DECORATORS
 export * from "./core/logger/LoggerDecorator";
 export * from "./core/metrics/MetricsDecorator";

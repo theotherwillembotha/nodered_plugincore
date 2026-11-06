@@ -1,0 +1,100 @@
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name",            { value:"", required:false })
+        .addDefault("outputOverwrite", { value:false, required:true })
+        .addDefault("outputProperty",  { value:"payload", required:false })
+        .addDefault("parseJson",       { value:true, required:true })
+        .setPaletteLabel("Template")
+        .setLabel(function() { return this.name || "Template"; })
+        .setIcon("template.svg")
+        .setInput("message")
+        .addOutputs("result")
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+    let node = this;
+
+    var _outputPropertyRow = $("#section_outputProperty");
+
+    function _updateOutputVisibility() {
+        var overwrite = $("#node-input-outputOverwrite").prop("checked");
+        if (overwrite) {
+            _outputPropertyRow.hide();
+            // Message must be a JSON object — force parseJson on and lock it.
+            $("#node-input-parseJson").prop("checked", true).prop("disabled", true);
+        } else {
+            _outputPropertyRow.show();
+            $("#node-input-parseJson").prop("disabled", false);
+        }
+    }
+
+    $("#node-input-outputOverwrite").on('change', _updateOutputVisibility);
+
+    // typedInput for the output property path
+    $("#node-input-outputProperty").typedInput({
+        default: 'msg',
+        types: ['msg']
+    });
+
+    // Restore saved values
+    $("#node-input-outputOverwrite").prop("checked", node.outputOverwrite || false);
+    $("#node-input-parseJson").prop("checked", node.parseJson !== false);
+    if (node.outputProperty) {
+        $("#node-input-outputProperty").typedInput('type', 'msg');
+        $("#node-input-outputProperty").typedInput('value', node.outputProperty);
+    }
+
+    _updateOutputVisibility();
+
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+    node = this;
+    node.outputOverwrite = $("#node-input-outputOverwrite").prop("checked");
+    node.outputProperty  = $("#node-input-outputProperty").typedInput('value') || 'payload';
+    // Overwrite mode requires parseJson — persist true even though the checkbox is disabled.
+    node.parseJson = node.outputOverwrite ? true : $("#node-input-parseJson").prop("checked");
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label class="towb_editorlabel" for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Template" />
+    </div>
+
+    <div class="form-row editorsectionheading">
+        <i class="w-16 fa fa-sign-out"></i> <span>Output</span>
+    </div>
+    <div class="editorgroupborder">
+        <div class="form-row nomargin">
+            <label class="towb_editorlabel">&nbsp;</label>
+            <input class="towb_checkbox" type="checkbox" id="node-input-outputOverwrite" />
+            <label class="towb_checkboxlabel" for="node-input-outputOverwrite">Overwrite entire message</label>
+        </div>
+        <div id="section_outputProperty" class="form-row nomargin" style="margin-top:6px;">
+            <label class="towb_editorlabel" for="node-input-outputProperty">Property</label>
+            <input type="text" id="node-input-outputProperty" />
+        </div>
+        <div class="form-row nomargin" style="margin-top:6px;">
+            <label class="towb_editorlabel">&nbsp;</label>
+            <input class="towb_checkbox" type="checkbox" id="node-input-parseJson" />
+            <label class="towb_checkboxlabel" for="node-input-parseJson">Parse result as JSON</label>
+        </div>
+    </div>
+</script>
+
+<script type="text/markdown" template-section="onIncludeDocumentation">
+### Templating Node
+
+Evaluates a template against the incoming `msg` object and writes the result to the outgoing message.
+
+#### Output modes
+
+**Set property** (default) — writes the template result to a specific property on the existing message (e.g. `msg.payload`).
+
+**Overwrite entire message** — replaces `msg` entirely. If the result is valid JSON and parses to a plain object it is used directly; otherwise it is wrapped as `{ payload: result }`.
+
+#### Result coercion
+
+When **Parse result as JSON** is checked (default), `JSON.parse` is attempted on the raw string output. If it succeeds the parsed value (object, array, number, boolean) is used. If it fails, or the checkbox is unchecked, the raw string is always kept.
+</script>

@@ -11,6 +11,7 @@ export interface LoggerTemplateNodeConfig extends BaseNodeConfig{
     loggerReference:string,
     logTemplateOverrideEnabled:boolean,
     logTemplateOverride:string;
+    logTemplateProvider:string;
 }
 
 export type LoggerTemplateConfig = {
@@ -20,6 +21,7 @@ export type LoggerTemplateConfig = {
     name:string;
     template:string;
     level:string;
+    logTemplateProvider:string;
 }
 
 @TemplateDescription({

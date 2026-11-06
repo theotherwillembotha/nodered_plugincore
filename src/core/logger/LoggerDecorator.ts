@@ -37,6 +37,7 @@ export function Logger(debug?:string):Function {
                   name:node.name(),
                   level:loggerConfigNode.config().level,
                   template: (config.logTemplateOverrideEnabled) ? config.logTemplateOverride : loggerConfigNode.config().template,
+                  logTemplateProvider: config.logTemplateProvider || 'HandlebarsTemplatingProvider',
                 };
 
                 // get a reference to the loggerService.
@@ -86,6 +87,7 @@ export function Logger(debug?:string):Function {
                   name:node.name(),
                   level: loggerConfigNode?.config().level ?? 'info',
                   template: (config.logTemplateOverrideEnabled) ? config.logTemplateOverride : (loggerConfigNode?.config().template ?? 'message:{{msg}}'),
+                  logTemplateProvider: config.logTemplateProvider || 'HandlebarsTemplatingProvider',
                 };
 
                 // get a reference to the loggerService.
