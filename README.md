@@ -1,828 +1,970 @@
-# @theotherwillembotha/node-red-plugincore
+# node-red-plugincore
 
-A TypeScript framework for building production-grade Node-RED plugins. Rather than scaffolding blank nodes from scratch, plugincore provides a collection of reusable helper components - base classes, decorator-driven injection, composable UI templates, and an assembly framework - that eliminate boilerplate and allow cross-plugin functionality like logging, metrics, and state management to be shared and reused without duplication.
+`@theotherwillembotha/node-red-plugincore` is two things in one package:
 
-This package serves two roles:
+**A build system** — a TypeScript-first pipeline that turns decorated classes and HTML fragments into the `Nodes.js` / `Plugins.js` files that Node-RED expects, without you having to write a single `RED.registerType()` call by hand.
 
-1. **Developer framework** - TypeScript base classes, decorators, and a build-time node generator that plugin authors extend to create their own Node-RED nodes. Cross-cutting concerns (logging, metrics, state, webhooks) are injected by annotation rather than manually wired.
-2. **Shared runtime infrastructure** - a set of services and a Webhook Server config node that are installed into Node-RED and shared automatically across all plugins built on this framework.
-
-Logger providers (Console, REST, Loki) and metrics providers (Prometheus) ship as separate optional plugins that plug into this infrastructure. See the [plugin ecosystem](#plugin-ecosystem) table at the end of this document.
+**A shared runtime library** — a collection of subsystems (logging, metrics, secrets, webhooks, templating, state) that any plugin can compose into its nodes via dependency injection, without bundling duplicate copies of the infrastructure at runtime.
 
 ---
 
-## Usage in Node-RED
+## How it works at a high level
 
-### Installation
+```
+Your plugin (TypeScript)
+  ├─ Decorated node classes  (@NodeDescription, @onInput, …)
+  ├─ Decorated HTML fragments (.html alongside each node)
+  └─ GenerateNodes.ts         ← the composition root
 
-Either use the **Manage Palette** option in the Node-RED editor, or run the following in your Node-RED user directory (typically `~/.node-red`):
+npm run build
+  ├─ tsc                 → build/   (compiled JS + .d.ts)
+  ├─ inline-resources    → embeds .html into the compiled output
+  ├─ node GenerateNodes  → build/Nodes.js + build/Plugins.js
+  └─ esbuild (optional)  → bundle plugincore into the output for deployment
+```
+
+Node-RED loads `Nodes.js` to register node types and `Plugins.js` to register services and client-side UI. Everything in between is handled by the framework.
+
+---
+
+## Installation
 
 ```bash
 npm install @theotherwillembotha/node-red-plugincore
 ```
 
-This installs the shared infrastructure and the Webhook Server config node. To use logging or metrics in your flows, also install the relevant provider plugin (e.g. `node-red-logging`, `node-red-prometheus`).
+**Peer requirements**
 
-### Config nodes
-
-#### Webhook Server
-
-The Webhook Server config node runs an Express v5 HTTP server on a configurable local port. It serves as the shared HTTP listener for any node that uses the `@Webhook` decorator or `WebhookTemplate`. Supports optional reverse proxy configuration so that registered webhook paths know their publicly-visible address.
-
-![Webhook Server Config Node](documentation/WebhookServerConfigNode.png)
-
-*The Webhook Server config node. **Name** is a human-readable label shown in the Server dropdown of any node using `WebhookTemplate`. **Port** is the local TCP port the Express server listens on — each server instance must use a unique port. The **External Host** and **External Port** fields (not shown) are used when the server sits behind a reverse proxy, allowing registered webhook nodes to know their publicly-visible address.*
-
-#### Logger providers
-
-Logger config nodes are provided by separate plugins:
-
-- **Console Logger**, **REST Logger** - [@theotherwillembotha/node-red-logging](https://github.com/theotherwillembotha/nodered_logging)
-- **Loki Logger** - [@theotherwillembotha/node-red-loki](https://github.com/theotherwillembotha/nodered_loki)
-
-Once a logger plugin is installed, a **Logging** section appears automatically in the editor of any node built with this framework. It is hidden when no logger plugins are present.
-
-#### Metrics providers
-
-Metrics config nodes are provided by separate plugins:
-
-- **Prometheus** (Counter, Gauge, Histogram, `/metrics` endpoint) - [@theotherwillembotha/node-red-prometheus](https://github.com/theotherwillembotha/nodered_prometheus)
-
-The **Metrics** section appears automatically in any node editor that supports metrics. It is hidden when no metrics plugins are installed.
+| Requirement | Version |
+|---|---|
+| Node.js | ≥ 18 |
+| Node-RED | ≥ 4.0.0 |
+| TypeScript | ≥ 5.0 (dev dependency in your plugin) |
+| esbuild | ≥ 0.20 (dev dependency in your plugin) |
 
 ---
 
-## Development - Building plugins with this framework
+## Setup
 
-### Prerequisites
+The following steps take you from an empty directory to a plugin that builds cleanly. By the end you will be able to run `npm run build` and have a working (empty) plugin ready to load into Node-RED.
 
-- Node.js 18+
-- Node-RED 4+
-- TypeScript 5+
+### 1. `package.json`
 
-### Installation
+The minimum `package.json` for a plugincore-based plugin:
 
-```bash
-npm install @theotherwillembotha/node-red-plugincore
+```json
+{
+  "name": "@yourscope/node-red-myplugin",
+  "version": "0.1.0",
+  "description": "My Node-RED plugin",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "files": ["build/", "icons/", "LICENSE", "README.md"],
+  "scripts": {
+    "clean":          "rm -rf ./build",
+    "build":          "npm run clean && tsc && npm run generate-nodes && npm run bundle",
+    "generate-nodes": "node build/GenerateNodes.js",
+    "bundle":         "node esbuild.js"
+  },
+  "engines": { "node": ">=18", "nodered": ">=4.0.0" },
+  "node-red": {
+    "version": ">=4.0.0",
+    "nodes":   { "myplugin": "./build/Nodes.js"   },
+    "plugins": { "myplugin": "./build/Plugins.js" }
+  },
+  "dependencies": {
+    "@theotherwillembotha/node-red-plugincore": "^0.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "esbuild":    "^0.25.0",
+    "@types/node":     "^20.0.0",
+    "@types/node-red": "~1.3.5"
+  }
+}
 ```
 
-### Required tsconfig.json
+Key points:
+- The `node-red.nodes` and `node-red.plugins` entries tell Node-RED which files to load.
+- `generate-nodes` runs **after** `tsc` — it needs the compiled JS.
+- `bundle` (esbuild) runs last — it bundles plugincore into your output for self-contained deployment.
+
+### 2. `tsconfig.json`
 
 ```json
 {
   "compilerOptions": {
-    "target":                  "es2022",
-    "module":                  "commonjs",
-    "rootDir":                 "./src",
-    "outDir":                  "./build",
-    "declaration":             true,
-    "experimentalDecorators":  true,
-    "emitDecoratorMetadata":   true,
-    "useDefineForClassFields": false
-  }
+    "target":                    "es2022",
+    "module":                    "commonjs",
+    "rootDir":                   "./src",
+    "outDir":                    "./build",
+    "experimentalDecorators":    true,
+    "emitDecoratorMetadata":     true,
+    "useDefineForClassFields":   false,
+    "declaration":               true,
+    "declarationMap":            true,
+    "esModuleInterop":           true,
+    "strict":                    true,
+    "skipLibCheck":              true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "exclude": ["node_modules"]
 }
 ```
 
-> **`useDefineForClassFields: false` is non-negotiable.** With `target: "es2022"`, TypeScript defaults this to `true`, which emits native class field initializers that run *after* `__decorate()`. This silently overwrites every `@Logger`, `@Metrics`, and other decorator-injected property with `undefined` at runtime - with no compile error and no startup warning.
+> **`useDefineForClassFields: false` is required.** With `es2022` as the target, TypeScript defaults to native class field initializers which silently break legacy decorators. Setting this to `false` restores the prototype-assignment behaviour the decorator system depends on.
 
-> **`declaration: true`** is required if any downstream TypeScript package imports types from your plugin. Without it, consumers get `Could not find a declaration file for module '...'`.
+### 3. `esbuild.js`
 
----
+esbuild bundles plugincore (and any other dependencies) into your `Nodes.js` / `Plugins.js` output so that Node-RED only needs to `require` a single self-contained file at runtime. Node-RED itself, plus a small set of plugincore build-time-only packages, are marked as external.
 
-## Building a flow node
+```js
+const esbuild = require('esbuild');
+const path    = require('path');
 
-A flow node is a node that appears on the Node-RED palette and processes messages passing through a flow. It extends `BaseNode`.
+// Build-time and host-provided packages that must NOT be bundled.
+const external = [
+    'node-red',
+    'jsdom', 'js-beautify', 'markdown-it',   // used only during node generation
+];
 
-### Minimal example
+const sharedConfig = {
+    bundle:   true,
+    platform: 'node',
+    target:   'node18',
+    external,
+    format:   'cjs',
+    alias: {
+        // Nodes.js self-references your package — point it at the local build output.
+        '@yourscope/node-red-myplugin': path.resolve('./build/index.js'),
+    },
+};
 
-The simplest possible flow node - no logging, no metrics, just message handling.
-
-**`src/myplugin/node/EchoNode.ts`**
-
-```typescript
-import {
-    BaseNode,         // base class for all flow nodes
-    BaseNodeConfig,   // base interface for node config - all config interfaces extend this
-    NodeDescription,  // decorator that registers the node type with the build system
-    SourceUtility,    // resolves HTML file path correctly in both build and dev contexts
-    onInput,          // decorator that wires a method to node.on("input")
-    Message           // Node-RED message type
-} from "@theotherwillembotha/node-red-plugincore";
-import { Node } from "node-red";
-
-// Extend BaseNodeConfig to declare this node's own configuration fields.
-// Each field maps to a form input with id="node-input-<fieldName>".
-interface EchoNodeConfig extends BaseNodeConfig {
-    name:   string;
-    prefix: string;
+async function build() {
+    await esbuild.build({ ...sharedConfig, entryPoints: ['build/Nodes.js'],   outfile: 'build/Nodes.js',   allowOverwrite: true });
+    console.log('Bundled Nodes.js');
+    await esbuild.build({ ...sharedConfig, entryPoints: ['build/Plugins.js'], outfile: 'build/Plugins.js', allowOverwrite: true });
+    console.log('Bundled Plugins.js');
 }
 
-@NodeDescription({
-    id:         "EchoNode",          // unique node type identifier across all plugins
-    name:       "Echo",              // display name in the Node-RED editor
-    group:      "my-plugin",         // palette group heading
-    sourceFile: SourceUtility.getSourcePath("/build/", "/src/") + "EchoNode.html",
-    package:    "@myscope/node-red-myplugin",  // must match the npm package name exactly
-})
-class EchoNode extends BaseNode<EchoNodeConfig> {
-
-    constructor(node: Node, config: EchoNodeConfig) {
-        super(node, config);
-        // this.config is available here and throughout the class
-    }
-
-    // @onInput wires this method to node.on("input") automatically.
-    // No need to call node.on("input", ...) in the constructor.
-    @onInput()
-    protected onMessageReceived(message: Message): void {
-        (message as any).payload = `${this.config.prefix}: ${(message as any).payload}`;
-        this.node().send(message as any);
-    }
-}
-
-export { EchoNode };
+build().catch(err => { console.error(err); process.exit(1); });
 ```
 
-**`src/myplugin/node/EchoNode.html`**
+### 4. `src/GenerateNodes.ts`
 
-```html
-<!-- onCompose runs at build time. "node" is a NodeBuilder instance.
-     Register defaults and configure the palette appearance here.
-     This section is NOT shipped to the browser. -->
-<script type="text/javascript" template-section="onCompose">
-    node.addDefault("name",   { value: "" });
-    node.addDefault("prefix", { value: "Echo", required: true });
-    node.setLabel(function() { return this.name || "Echo"; });
-    node.setColor("#87CEEB");
-    node.setIcon("font-awesome/fa-reply");
-    node.setInput("in");
-    node.addOutputs(["out"]);
-</script>
+`GenerateNodes.ts` is the composition root of your plugin. It declares which services and nodes the generator should include. Place it at `src/GenerateNodes.ts` — it is compiled alongside your nodes by `tsc` and then executed by `node build/GenerateNodes.js`.
 
-<!-- onIncludeEditForm is the HTML rendered inside the editor dialog.
-     Use id="node-input-<fieldName>" - Node-RED auto-saves and restores these. -->
-<script type="text/html" template-section="onIncludeEditForm">
-    <div class="form-row">
-        <label for="node-input-name">Name</label>
-        <input type="text" id="node-input-name" placeholder="Echo">
-    </div>
-    <div class="form-row">
-        <label for="node-input-prefix">Prefix</label>
-        <input type="text" id="node-input-prefix" placeholder="Echo">
-    </div>
-</script>
-
-<!-- onIncludeDocumentation is rendered in the Node-RED sidebar Info panel. -->
-<script type="text/markdown" template-section="onIncludeDocumentation">
-## Echo
-
-Prepends a configurable prefix to `msg.payload`.
-
-### Properties
-
-- **Name** - Display name in the editor.
-- **Prefix** - Text prepended to the incoming payload.
-
-### Output
-
-The modified message is passed to the single output.
-</script>
-```
-
----
-
-### Full-featured example
-
-This version adds structured logging, a metrics counter, and a webhook route. Compare each addition to the minimal example above.
-
-**`src/myplugin/node/WebhookListenerNode.ts`**
+For an empty plugin that is ready to have nodes added to it:
 
 ```typescript
-import {
-    BaseNode, BaseNodeConfig,
-    NodeDescription, SourceUtility,
-    LoggerTemplate, LoggerTemplateConfig,  // + adds the logging UI section and its config fields
-    MetricsTemplate, MetricsTemplateConfig, // + adds the metrics UI section and its config fields
-    WebhookTemplate,                        // + adds the webhook server selector and path field
-    Log, Logger,                            // @Logger injects a Log instance at runtime
-    CounterMetric, Metrics, MetricType,     // @Metrics injects a metric collector at runtime
-    Webhook,                                // @Webhook registers HTTP routes with the webhook server
-    onInput, Message
-} from "@theotherwillembotha/node-red-plugincore";
-import { Node } from "node-red";
-import { Request, Response } from "express";
+import { NodeGenerator, NodeTypeService } from "@theotherwillembotha/node-red-plugincore";
 
-// Extend all three mixin config interfaces to include the fields
-// that LoggerTemplate, MetricsTemplate, and WebhookTemplate manage.
-interface WebhookListenerNodeConfig
-    extends BaseNodeConfig, LoggerTemplateConfig, MetricsTemplateConfig {
-    name:            string;
-    webhookServer:   string;  // id of the WebhookServerConfigNode
-    path:            string;  // HTTP path registered with the webhook server
-}
-
-@NodeDescription({
-    id:         "WebhookListenerNode",
-    name:       "Webhook Listener",
-    group:      "my-plugin",
-    sourceFile: SourceUtility.getSourcePath("/build/", "/src/") + "WebhookListenerNode.html",
-    package:    "@myscope/node-red-myplugin",
-    templates: [
-        // Each template injects its own form rows, edit lifecycle hooks, and
-        // onCompose defaults. Order here controls the order they appear in the editor.
-        { template: LoggerTemplate,  config: {} },
-        { template: MetricsTemplate, config: {} },
-        { template: WebhookTemplate, config: {} },
-    ]
-})
-class WebhookListenerNode extends BaseNode<WebhookListenerNodeConfig> {
-
-    // Injected by the framework at runtime. Declare with ! - TypeScript cannot
-    // see the injection mechanism at compile time.
-    @Logger()
-    private log!: Log;
-
-    // Injected by the framework. The concrete implementation depends on which
-    // metrics provider plugin is installed (e.g. Prometheus). Falls back to a
-    // silent no-op if no provider is configured.
-    @Metrics({ name: "webhook_requests_total", help: "Total inbound webhook requests", type: MetricType.Counter })
-    private requestCount!: CounterMetric;
-
-    // @Webhook registers the methods below with the WebhookServerConfigNode
-    // referenced by this.config.webhookServer. Routes are registered on deploy
-    // and removed on close.
-    @Webhook()
-    private webhook: any;
-
-    constructor(node: Node, config: WebhookListenerNodeConfig) {
-        super(node, config);
-    }
-
-    // HTTP route registered via @Webhook. Method name determines the HTTP verb.
-    // The path is read from this.config.path at runtime.
-    public post(req: Request, res: Response): void {
-        this.requestCount.inc();
-        this.log.log({ event: "webhook.received", body: req.body });
-        this.node().send({ payload: req.body } as any);
-        res.status(200).json({ ok: true });
-    }
-
-    @onInput()
-    protected onMessageReceived(message: Message): void {
-        // Example: forward messages onward unchanged
-        this.node().send(message as any);
-    }
-}
-
-export { WebhookListenerNode };
-```
-
-**`src/myplugin/node/WebhookListenerNode.html`**
-
-The node's HTML file only contains its *own* fields. `LoggerTemplate`, `MetricsTemplate`, and `WebhookTemplate` inject their own form rows and edit lifecycle sections automatically - those sections are merged with this file's sections at build time.
-
-```html
-<script type="text/javascript" template-section="onCompose">
-    // Only register this node's own fields. Logger, Metrics, and Webhook
-    // fields are added automatically by their respective templates.
-    node.addDefault("name",          { value: "" });
-    node.addDefault("webhookServer", { value: "", required: true });
-    node.addDefault("path",          { value: "/webhook" });
-    node.setLabel(function() { return this.name || "Webhook Listener"; });
-    node.setColor("#F0A500");
-    node.setIcon("font-awesome/fa-sign-in");
-    node.setInput("in");
-    node.addOutputs(["out"]);
-</script>
-
-<!-- This section runs when the editor dialog opens (oneditprepare).
-     Initialize any custom widgets here. Logger/Metrics/Webhook templates
-     have their own onIncludeEditPrepare that runs alongside this one. -->
-<script type="text/javascript" template-section="onIncludeEditPrepare">
-    // Custom widget initialization goes here
-</script>
-
-<!-- The editor form. Logger, Metrics, and Webhook sections are appended
-     automatically below these rows by their respective templates. -->
-<script type="text/html" template-section="onIncludeEditForm">
-    <div class="form-row">
-        <label for="node-input-name">Name</label>
-        <input type="text" id="node-input-name" placeholder="Webhook Listener">
-    </div>
-    <!-- Webhook server + path fields are injected by WebhookTemplate -->
-</script>
-
-<script type="text/markdown" template-section="onIncludeDocumentation">
-## Webhook Listener
-
-Registers an HTTP endpoint with a Webhook Server config node and emits a
-message for each incoming request.
-
-### Properties
-
-- **Name** - Display name in the editor.
-- **Logging** - Select a logger provider and optionally override the log template.
-- **Metrics** - Select a metrics provider to track request counts.
-- **Webhook Server** - The Webhook Server config node providing the HTTP listener.
-- **Path** - The HTTP path to register (e.g. `/webhook`).
-
-### Output
-
-`msg.payload` contains the parsed request body.
-</script>
-```
-
-> **Key differences from the minimal example:**
-> - `templates` array in `@NodeDescription` - each entry auto-composes a UI section and its lifecycle hooks.
-> - Config interface mixins (`LoggerTemplateConfig`, `MetricsTemplateConfig`) - provide TypeScript types for the fields those templates manage.
-> - `@Logger()`, `@Metrics()`, `@Webhook()` on class properties - injected at runtime; always declare with `!`.
-> - The node's HTML only handles its own fields; template-owned fields are never duplicated.
-
----
-
-## Building a config node
-
-A config node is a shared configuration resource referenced by multiple flow nodes. It extends `ConfigNode`. Config nodes do not appear on the palette; they are created from the editor's config node panel.
-
-Config nodes follow the same pattern as flow nodes with two differences:
-- Extend `ConfigNode<TConfig>` instead of `BaseNode<TConfig>`
-- Form field IDs use `node-config-input-<fieldName>` instead of `node-input-<fieldName>`
-
-```typescript
-@NodeDescription({ id: "MyConfigNode", name: "My Config", group: "my-plugin", ... })
-class MyConfigNode extends ConfigNode<MyConfigNodeConfig> {
-    constructor(node: Node, config: MyConfigNodeConfig) {
-        super(node, config);
-        // register with a service, open a connection, etc.
-    }
-}
-```
-
-```html
-<script type="text/html" template-section="onIncludeEditForm">
-    <div class="form-row">
-        <!-- config nodes use node-config-input-*, not node-input-* -->
-        <label for="node-config-input-name">Name</label>
-        <input type="text" id="node-config-input-name">
-    </div>
-</script>
-```
-
----
-
-## Cross-cutting infrastructure
-
-These subsystems are the building blocks behind every shared UI section. Understanding how the pieces fit together makes it easier to build plugins that integrate cleanly with the rest of the ecosystem.
-
-### Logger infrastructure
-
-The logging subsystem has four parts:
-
-| Part | Role |
-|------|------|
-| `LoggerService` | Background service that maintains logger instances. Must be registered in `GenerateNodes.ts`. |
-| `@Logger()` | Property decorator. Injects a `Log` instance wired to whichever logger provider the user selected. |
-| `LoggerTemplate` | UI template. Adds a **Logging** section to any node editor - an enable toggle, a logger provider selector, and an optional message template override. Hidden when no logger provider plugins are installed. |
-| `LoggerConfigNode` | Abstract base class that logger provider plugins extend. Not registered in plugincore itself. |
-
-**Using logging in a node:**
-
-```typescript
-// 1. Extend LoggerTemplateConfig in the node's config interface
-interface MyNodeConfig extends BaseNodeConfig, LoggerTemplateConfig { ... }
-
-// 2. Include LoggerTemplate in @NodeDescription templates
-@NodeDescription({ ..., templates: [{ template: LoggerTemplate, config: {} }] })
-class MyNode extends BaseNode<MyNodeConfig> {
-
-    // 3. Declare the injected property
-    @Logger()
-    private log!: Log;
-
-    @onInput()
-    protected handle(msg: Message): void {
-        this.log.log({ event: "received", payload: (msg as any).payload });
-    }
-}
-```
-
-**Creating a logger provider:**
-
-Extend `LoggerConfigNode` and tag it so the `NodeTypeService` can discover it:
-
-```typescript
-import { LoggerConfigNode, ConfigNodeConfig, NodeDescription, SourceUtility }
-    from "@theotherwillembotha/node-red-plugincore";
-
-interface ConsoleLoggerConfig extends ConfigNodeConfig {
-    name:     string;
-    level:    string;
-    template: string;
-}
-
-@NodeDescription({
-    id:         "ConsoleLoggerConfigNode",
-    name:       "Console Logger",
-    group:      "logging",
-    sourceFile: SourceUtility.getSourcePath("/build/", "/src/") + "ConsoleLoggerConfigNode.html",
-    package:    "@myscope/node-red-logging",
-    tags:       ["LoggerType"],   // <-- required: makes this discoverable as a logger provider
-})
-class ConsoleLoggerConfigNode extends LoggerConfigNode<ConsoleLoggerConfig> { ... }
-```
-
-The `"LoggerType"` tag is what causes this node to appear in the **Logger** dropdown of any node using `LoggerTemplate`.
-
-**Screenshot - LoggerTemplate section** (as it appears inside a consumer node's editor):
-
-![Logger Template](documentation/LoggerTemplate.png)
-
-*The Logging section injected by `LoggerTemplate`. The enable toggle controls whether log calls are forwarded to the provider. The Logger dropdown lists all installed logger providers, with edit (pencil) and create (plus) buttons. Override Template allows per-node customisation of the log format.*
-
----
-
-### Metrics infrastructure
-
-The metrics subsystem mirrors the logging subsystem exactly:
-
-| Part | Role |
-|------|------|
-| `MetricsService` | Background service that maintains metric collector registrations. Must be registered in `GenerateNodes.ts`. |
-| `@Metrics({...})` | Property decorator. Injects the appropriate metric type (Counter, Gauge, Histogram) from the configured provider. Falls back to a silent no-op when no provider is configured. |
-| `MetricsTemplate` | UI template. Adds a **Metrics** section with a provider selector. Hidden when no metrics plugins are installed. |
-| `MetricsConfigNode` | Abstract base class that metrics provider plugins extend. |
-
-**Metric types:**
-
-| `MetricType` | Property type | Description |
-|--------------|--------------|-------------|
-| `Counter` | `CounterMetric` | Monotonically increasing count. `.inc(amount?)` |
-| `Gauge` | `GaugeMetric` | Value that can go up or down. `.set(value)`, `.inc()`, `.dec()` |
-| `Histogram` | `HistogramMetric` | Distribution of observed values. `.observe(value)` |
-| `Summary` | `SummaryMetric` | Quantile distribution. `.observe(value)` |
-
-```typescript
-@Metrics({ name: "messages_total",  help: "Messages processed",  type: MetricType.Counter   })
-private messageCount!: CounterMetric;
-
-@Metrics({ name: "queue_depth",     help: "Current queue depth", type: MetricType.Gauge     })
-private queueDepth!: GaugeMetric;
-
-@Metrics({ name: "process_seconds", help: "Processing latency",  type: MetricType.Histogram })
-private latency!: HistogramMetric;
-```
-
-**Screenshot - MetricsTemplate section:**
-
-![Metrics Template](documentation/MetricsTemplate.png)
-
-*The Metrics section injected by `MetricsTemplate`. Enable Metrics controls whether metric calls are forwarded. The Metric Provider dropdown lists all installed metrics providers.*
-
-**Metric config nodes** (provided by `node-red-prometheus`):
-
-Plugin authors can create specialised metric config nodes to let users define named, reusable metric collectors that are referenced by flow nodes.
-
-![Counter Metric Config Node](documentation/CounterMetricConfigNode.png)
-
-*Counter Metric Config Node - tracks a monotonically increasing count. **Name** and **Description** label the counter in the Prometheus `/metrics` output. **Reset on Deploy** zeroes the counter each time flows are re-deployed. **Metric Provider** selects the Prometheus instance to register with.*
-
-![Gauge Metric Config Node](documentation/GaugeMetricConfigNode.png)
-
-*Gauge Metric Config Node - tracks a value that can increase or decrease freely. Configuration is identical to Counter, except the underlying metric type allows `.inc()`, `.dec()`, and `.set(value)` calls.*
-
-Timer Metric Config Nodes can operate in two modes selected by the **Type** dropdown:
-
-![Timer Metric Config Node - Summary](documentation/TimerMetricConfigNode_summary.png)
-
-*Summary mode. **Percentile Type** controls whether percentile boundaries are computed automatically or specified manually. The **Percentiles** field accepts a comma-separated list of quantiles (e.g. `0.01, 0.1, 0.9, 0.99`).*
-
-![Timer Metric Config Node - Histogram](documentation/TimerMetricConfigNode_histogram.png)
-
-*Histogram mode. Observations are sorted into fixed buckets defined by **Bucket Type**, **Start**, **Interval**, and **Count**. Linear bucketing (shown) produces evenly spaced boundaries starting at Start and stepping by Interval.*
-
----
-
-### State infrastructure
-
-The state subsystem provides a common interface for externalising node state - allowing state to be stored and coordinated outside of Node-RED (e.g. in ZooKeeper). Nodes that need persistent or distributed state can use this subsystem without being coupled to a specific storage backend.
-
-| Part | Role |
-|------|------|
-| `StateConfigNode` | Abstract base class. State provider plugins extend this. |
-| `StateTemplate` | UI template. Adds a **State** section with a provider selector to any node editor. Auto-creates an `InternalStateConfigNode` on first open if no provider is configured. |
-
-**Creating a state provider:**
-
-Extend `StateConfigNode` and tag it `"StateProvider"`:
-
-```typescript
-@NodeDescription({ ..., tags: ["StateProvider"] })
-class MyStateConfigNode extends StateConfigNode<MyStateConfig> { ... }
-```
-
-**Screenshot - StateTemplate section:**
-
-![State Template](documentation/StateTemplate.png)
-
-*The State section injected by `StateTemplate`. The Provider dropdown lists all installed state provider nodes. The pencil button opens the selected provider's editor. If no external state provider is installed, an Internal State Config Node is created automatically and selected.*
-
----
-
-### Webhook infrastructure
-
-The webhook subsystem provides a shared Express v5 HTTP server that multiple nodes can register routes on.
-
-| Part | Role |
-|------|------|
-| `WebhookServerConfigNode` | Config node (provided by plugincore itself). Runs the HTTP server on a configured port. |
-| `@Webhook()` | Property decorator. Registers public methods (`get`, `post`, `put`, `delete`) as HTTP routes with the referenced `WebhookServerConfigNode`. |
-| `WebhookTemplate` | UI template. Adds a webhook server selector and path field to the node editor. |
-
-![Webhook Template](documentation/WebhookTemplate.png)
-
-*The Webhook section injected by `WebhookTemplate`. **Server** is a dropdown that lists all `WebhookServerConfigNode` instances, with edit and add buttons. **Path** is the HTTP route registered on that server (e.g. `/example`). **Authentication** selects the credential strategy — None, Basic Auth, or API Key — and reveals the relevant credential fields when a strategy other than None is selected. **Reverse Proxy** is hidden unless a reverse proxy provider plugin (e.g. `node-red-nginxproxymanager`) is installed; when shown, it lets you map the webhook path to a public-facing domain.*
-
----
-
-## NodeTypeService and DelegatedConfigReferenceNode
-
-These two components are the plumbing behind the provider selector dropdowns. They are required in every plugin's `GenerateNodes.ts`.
-
-### NodeTypeService
-
-`NodeTypeService` exposes a `GET /nodetypeservice/find?tag=<tag>` endpoint that returns all registered node types carrying a given tag. This is how `LoggerTemplate`, `MetricsTemplate`, and `StateTemplate` discover available providers at runtime without any hardcoded knowledge of which plugins are installed.
-
-When you annotate a node with `tags: ["LoggerType"]`, the `NodeTypeService` indexes it under that tag. Multiple tags are supported:
-
-```typescript
-@NodeDescription({
-    id:   "PrometheusMetricsConfigNode",
-    tags: ["MetricsProvider"],   // discoverable by MetricsTemplate
-    ...
-})
-```
-
-The selector templates query this endpoint in `onIncludeEditPrepare` and hide the entire section if the response is empty - so nodes that use `LoggerTemplate` or `MetricsTemplate` remain clean in setups where those provider plugins are not installed.
-
-### DelegatedConfigReferenceNode
-
-`DelegatedConfigReferenceNode` is a thin shim config node that acts as the property type for provider selector fields. It provides reference counting - Node-RED tracks how many nodes reference a given config node and prevents deletion while it is in use - without the normal behaviour where Node-RED resets a config selector to blank when the editor saves.
-
-This is necessary because provider selectors (Logger, Metrics, State) are managed manually by the template's JavaScript rather than by Node-RED's auto-bind mechanism. Using `DelegatedConfigReferenceNode` as the declared type preserves reference counting while letting the template control the actual value.
-
-`DelegatedConfigReferenceNode` must be registered in every plugin's `GenerateNodes.ts`:
-
-```typescript
-new NodeGenerator(...)
-    .registerNode(DelegatedConfigReferenceNode)
-    ...
-```
-
----
-
-## Node HTML file - template sections
-
-Each node's `.html` file is divided into named sections using the `template-section` attribute. The build pipeline reads these sections and assembles them into the correct slots in the generated Node-RED registration call. Sections from multiple templates (`LoggerTemplate`, `MetricsTemplate`, etc.) are merged in the order they were registered.
-
-```html
-<script type="text/javascript" template-section="onCompose"> ... </script>
-<div template-section="onIncludeOnce"> ... </div>
-<script type="text/javascript" template-section="onIncludeEditPrepare"> ... </script>
-<script type="text/html" template-section="onIncludeEditForm"> ... </script>
-<script type="text/javascript" template-section="onIncludeEditSave"> ... </script>
-<script type="text/javascript" template-section="onIncludeEditCancel"> ... </script>
-<script type="text/javascript" template-section="onIncludeEditDelete"> ... </script>
-<script type="text/markdown" template-section="onIncludeDocumentation"> ... </script>
-```
-
-### Section reference
-
-| Section | When it runs | Typical use |
-|---------|-------------|-------------|
-| `onCompose` | At **build time** inside a `NodeBuilder` context | Call `node.addDefault(...)`, `node.setLabel(...)`, `node.setColor(...)`, `node.setIcon(...)`, `node.setInput(...)`, `node.addOutputs(...)`. Not shipped to the browser. |
-| `onIncludeOnce` | Injected into the browser **once per page load** | Global styles (`<style>`), shared helper functions, and cached resource fetches. Wrap scripts in `<script>` inside a `<div>`. Shared across all instances. |
-| `onIncludeEditPrepare` | Runs when the **node editor opens** (`oneditprepare`) | Initialise `typedInput` widgets, bind event handlers, fetch async data, restore saved state. Assign `this` to a variable before async code. |
-| `onIncludeEditForm` | The **HTML form** inside the editor dialog | `<div class="form-row">` blocks. Use `id="node-input-<field>"` for flow nodes; `id="node-config-input-<field>"` for config nodes. |
-| `onIncludeEditSave` | Runs when the user clicks **Done** (`oneditsave`) | Read widget values back into the node object. Standard `node-input-*` fields save automatically; use this only for non-standard fields. |
-| `onIncludeEditCancel` | Runs when the user clicks **Cancel** (`oneditcancel`) | Clean up resources - always call `.dispose()` on `ScriptEditorTemplate` editors here to avoid Monaco memory leaks. |
-| `onIncludeEditDelete` | Runs when the node is **deleted** | Release any persistent resources tied to this node instance. Rarely needed. |
-| `onIncludeDocumentation` | Rendered in the **help panel** sidebar | Markdown describing the node's behaviour, properties, inputs, and outputs. |
-
-### `onCompose` - NodeBuilder API
-
-| Method | Description |
-|--------|-------------|
-| `node.addDefault(name, options)` | Register a config field. `options`: `{ value, required?, validate? }` |
-| `node.setLabel(fn)` | Function returning the node's label at runtime (`this` = node instance) |
-| `node.setPaletteLabel(label)` | Fixed palette label string |
-| `node.setColor(color)` | Palette colour (hex string) |
-| `node.setIcon(icon)` | Palette icon filename (relative to `icons/`, or `font-awesome/fa-*`) |
-| `node.setLabelStyle(style)` | CSS class for the label (e.g. `node_label_white`) |
-| `node.setInput(label)` | Add an input port |
-| `node.addOutputs(labels)` | Add one or more output ports; pass a string array for labelled outputs |
-
----
-
-## UI helpers
-
-Including `UIHelperTemplate` in a node's `templates` array injects two client-side factory functions into the Node-RED editor page. Both are globally available as `PluginCore.dialog(...)` and `PluginCore.table(...)` and are styled to match Node-RED's editor aesthetic.
-
-### `PluginCore.dialog(options)`
-
-Opens a modal overlay with a title bar and one or more tabs.
-
-```javascript
-PluginCore.dialog({
-    title: "My Plugin - Status",
-    tabs: [
-        {
-            label: "Proxy Hosts",
-            render: function($container) {
-                $container.append(
-                    PluginCore.table({
-                        columns: [
-                            { key: "id",   label: "ID" },
-                            { key: "name", label: "Name" },
-                            { key: "enabled", label: "Enabled",
-                              render: function(v) {
-                                  return $("<span>")
-                                      .addClass(v ? "plugincore-status-enabled"
-                                                  : "plugincore-status-disabled")
-                                      .text(v ? "Enabled" : "Disabled");
-                              }}
-                        ],
-                        rows: data
-                    })
-                );
-            }
-        }
-    ]
-});
-```
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `title` | `string` | Heading in the dialog title bar |
-| `tabs` | `array` | One or more tab definitions |
-| `tabs[].label` | `string` | Tab heading |
-| `tabs[].render` | `function($container)` | Called with a jQuery element - append content into it |
-
-**Returns:** `{ close() }` - call `close()` to dismiss programmatically.
-
-### `PluginCore.table(config)`
-
-Returns a styled jQuery `<table>` ready to append into any container.
-
-```javascript
-var $table = PluginCore.table({
-    columns: [
-        { key: "id",     label: "ID" },
-        { key: "domain", label: "Domain",
-          render: function(value, row) { return value.join(", "); } }
-    ],
-    rows: arrayOfObjects
-});
-$container.append($table);
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `columns[].key` | `string` | Property name on each row object |
-| `columns[].label` | `string` | Column header text |
-| `columns[].render` | `function(value, row)` | Optional - return a string or jQuery element for custom cells |
-| `rows` | `object[]` | Data rows |
-
-**CSS classes for cell content:**
-
-| Class | Colour | Use |
-|-------|--------|-----|
-| `plugincore-status-enabled` | Green | Active / enabled state |
-| `plugincore-status-disabled` | Red | Inactive / disabled state |
-
-### `PluginCore.createScriptEditor(elementId, template, initialValue)`
-
-Including `ScriptEditorTemplate` in a node's `templates` array injects a Monaco-based script editor factory. Wraps the async Monaco initialisation into a single call.
-
-```javascript
-// In onIncludeEditPrepare:
-let node = this;
-node.scriptEditor = PluginCore.createScriptEditor(
-    'node-input-script-editor',      // DOM id of the container element
-    `async function(msg) { \${script} }`,  // TypeScript context template
-    node.script || 'return true;'    // initial value
-);
-
-// In onIncludeEditSave:
-node.script = node.scriptEditor.getValue();
-delete node.scriptEditor;
-
-// In onIncludeEditCancel - always call dispose() to avoid Monaco memory leaks:
-node.scriptEditor.dispose();
-delete node.scriptEditor;
-```
-
-**Returns:** `{ getValue(): string, dispose(): void }`
-
-The `template` string provides TypeScript context that the Monaco language service uses for type checking and completions. Use `${script}` as the placeholder for the user's code - they see only their code, not the surrounding context.
-
----
-
-> **Handlebars escaping in node HTML files**
->
-> Node HTML files are processed by Handlebars during the build step. Any `{{ }}` anywhere in the file - including `<script>` blocks, comments, and markdown sections - will be interpreted as a Handlebars expression.
->
-> Escape curly braces with a backslash wherever they appear literally:
->
-> ```javascript
-> // Wrong:  @returns {{ getValue(): string }}
-> // Correct: @returns \{{ getValue(): string \}}
-> ```
-
----
-
-## Registering nodes for generation
-
-Create a `GenerateNodes.ts` at the root of your `src/` directory. This is the composition root - register every service, template, and node, then call `.generate()` to emit the two Node-RED entry files.
-
-```typescript
-import { NodeGenerator } from "@theotherwillembotha/node-red-plugincore";
-import {
-    LoggerService, MetricsService, NodeTypeService, SettingsService,
-    DelegatedConfigReferenceNode,
-    BasicTemplate, LoggerTemplate, MetricsTemplate,
-} from "@theotherwillembotha/node-red-plugincore";
-
-import { MyService }    from "./myplugin/service/MyService";
-import { MyConfigNode } from "./myplugin/node/MyConfigNode";
-import { MyNode }       from "./myplugin/node/MyNode";
-
-new NodeGenerator("./src/myplugin/")
-    // ── Infrastructure ── required by every plugin; deduplication guards make this safe to register from multiple plugins
-    .registerService(LoggerService)
-    .registerService(MetricsService)
+new NodeGenerator("./src/")
     .registerService(NodeTypeService)
-    .registerService(SettingsService)
-    .registerTemplate(BasicTemplate)
-    .registerTemplate(LoggerTemplate)
-    .registerTemplate(MetricsTemplate)
-    .registerNode(DelegatedConfigReferenceNode)
-    // ── Plugin-specific ──────────────────────────────────────────────────────
-    .registerService(MyService)
-    .registerNode(MyConfigNode)
-    .registerNode(MyNode)
-    .generate("./build/Nodes", "./build/Plugins");
+    .generate("./build/Nodes", "./build/Plugins", "@yourscope/node-red-myplugin");
 
 process.exit(0);
 ```
 
-Logger and metrics provider nodes (`ConsoleLoggerConfigNode`, `PrometheusMetricsConfigNode`, etc.) are **not** registered here. They are registered by their own dedicated plugins and discovered at runtime through the `NodeTypeService` tag system.
+`NodeTypeService` powers the tag registry that plugincore uses internally. It should always be the first entry.
 
-### Wiring up package.json
+> When you add nodes that use plugincore subsystems (logging, secrets, etc.), the `@NodeDescription` dependency chain resolves the required services automatically. You only need to list services explicitly when you want to guarantee their initialization order, or when registering infrastructure not tied to any specific node.
 
-```json
-{
-  "node-red": {
-    "version": ">=4.0.0",
-    "nodes":   { "my-plugin": "./build/Nodes.js"   },
-    "plugins": { "my-plugin": "./build/Plugins.js" }
-  }
+### 5. Directory structure
+
+```
+your-plugin/
+├─ src/
+│   ├─ GenerateNodes.ts
+│   └─ myplugin/
+│       └─ node/
+│           ├─ MyNode.ts
+│           └─ MyNode.html
+├─ icons/
+├─ esbuild.js
+├─ package.json
+└─ tsconfig.json
+```
+
+### 6. First build
+
+```bash
+npm install
+npm run build
+```
+
+A successful empty build produces:
+
+```
+build/
+├─ Nodes.js      ← Node-RED node registrations
+├─ Plugins.js    ← Node-RED plugin/service registrations
+├─ index.js      ← Public API (empty until you export nodes)
+└─ index.d.ts    ← Type declarations
+```
+
+You can now point Node-RED at your package and it will load without errors. No nodes will appear in the palette yet — that is expected.
+
+---
+
+## Architecture
+
+Understanding the building blocks makes it much easier to work with the shared subsystems. There are five types of things you compose in a plugincore plugin:
+
+### Nodes
+
+A **node** is a flow node — the boxes users drag onto the canvas. It extends `BaseNode<TConfig>` and uses decorators to describe itself to the framework. The `@NodeDescription` decorator provides metadata (id, name, palette group, templates to include) and the `@onInput` decorator marks the method that handles incoming messages.
+
+```typescript
+@NodeDescription({
+    id:        "MyNode",
+    name:      "My Node",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate],    // ← UI fragments to inject into the editor form
+})
+export class MyNode extends BaseNode<MyNodeConfig> {
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        // handle the message
+        this.node().send(message);
+    }
 }
 ```
 
-### Build
+Each node has a companion `.html` file that provides the editor form. The HTML is divided into named sections (`onCompose`, `onIncludeEditForm`, `onIncludeDocumentation`, etc.) which the template engine merges into the final Node-RED editor HTML at build time.
 
-```bash
-npm run build       # clean → tsc → generate node files → bundle (esbuild) → copy icons
-npm run clean       # remove build/
+### Config nodes
+
+A **config node** is a shared configuration object that one or more flow nodes reference. It extends `ConfigNode<TConfig>` and uses `@NodeDescription` with `group: "config"`. Config nodes appear in the _Config Nodes_ panel of the editor rather than on the canvas. A common example is a connection config node: many nodes may share one database connection config node rather than each holding their own credentials.
+
+```typescript
+@NodeDescription({
+    id:    "MyConnectionConfigNode",
+    name:  "My Connection",
+    group: "config",
+    package: "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate],
+})
+export class MyConnectionConfigNode extends ConfigNode<MyConnectionConfig> {
+    // lifecycle and shared state
+}
 ```
 
+The key difference between a node and a config node is **ownership**. Flow nodes are instantiated per-node on the canvas. Config nodes are instantiated once and referenced by ID from the flow nodes that need them.
+
+### Templates
+
+A **template** is a reusable bundle of editor UI that can be injected into any node's editor form. Templates are how the shared subsystems add their fields (logger selector, metrics selector, webhook server picker, etc.) to your nodes without you writing any HTML. You declare which templates a node uses in `@NodeDescription({ templates: [...] })`.
+
+```typescript
+@NodeDescription({
+    id: "MyNode",
+    // ...
+    templates: [
+        BasicTemplate,      // base styles — almost always required
+        LoggerTemplate,     // adds the logger selector row to the editor form
+        MetricsTemplate,    // adds the metrics selector row
+    ],
+})
+export class MyNode extends BaseNode<MyNodeConfig & LoggerTemplateNodeConfig & MetricsTemplateConfig> { ... }
+```
+
+A template is a TypeScript class decorated with `@TemplateDescription`. It declares a companion `.html` file and a list of its own dependencies (other templates, services, nodes it needs to be present). The build system resolves the full dependency tree and merges all sections in the correct order.
+
+### Fragments
+
+A **config fragment** is a configuration section that appears inside a node's editor form but is backed by a _shared_ config node rather than per-node state. Fragments are used when multiple nodes need to reference the same external resource (a logger, a metrics backend, a webhook server) while keeping the configuration in one place.
+
+You do not write fragments directly in most cases — the shared subsystem templates handle them for you. For example, adding `LoggerTemplate` to your node automatically inserts a logger-selector fragment that creates or references a logger config node.
+
+### Services
+
+A **service** extends `BaseService` and provides server-side functionality to Node-RED. Services are registered in `GenerateNodes.ts` and initialized by the framework when Node-RED starts. They expose `httpAdmin` endpoints, manage global state, and act as the server-side counterpart to the client-side templates.
+
+```typescript
+@ServiceDescription({ id: "my-service", sourceFile: "..." })
+export class MyService extends BaseService {
+    public init(red: NodeAPI): void {
+        red.httpAdmin.get("/myservice/status", red.auth.needsPermission("inject.write"),
+            (_req, res) => res.send({ ok: true }));
+    }
+    public deinit(_red: NodeAPI): void {}
+}
+```
+
+Services are cross-bundle safe — they store their shared state on the Node.js `global` object so that the same service instance is reused even when multiple plugins each bundle their own copy of plugincore.
+
 ---
 
-## Plugin ecosystem
+## Shared subsystems
 
-These plugins are built on this framework and available from npm. Each plugin is independently installable - only install what your flows need.
+### Logger
 
-| Plugin | Uses from plugincore | Provides |
-|--------|---------------------|----------|
-| [@theotherwillembotha/node-red-logging](https://github.com/theotherwillembotha/nodered_logging) | `LoggerService` `LoggerConfigNode` | **Console Logger Config Node** (config) - writes log entries to stdout with configurable level and Handlebars message template<br>**REST Logger Config Node** (config) - POSTs structured log entries to an HTTP endpoint |
-| [@theotherwillembotha/node-red-loki](https://github.com/theotherwillembotha/nodered_loki) | `LoggerService` `LoggerConfigNode` `LoggerTemplate` | **Loki Config Node** (config) - shared connection reference for a Grafana Loki backend<br>**Loki Logger Config Node** (config) - streams structured log entries to Loki<br>**Loki Query Node** (flow) - executes LogQL queries against a Loki backend and emits results |
-| [@theotherwillembotha/node-red-telemetry](https://github.com/theotherwillembotha/nodered_telemetry) | `LoggerService` `LoggerTemplate` | **Logger Node** (flow) - attaches to any installed logger provider; routes `msg` through the selected logger on each message |
-| [@theotherwillembotha/node-red-prometheus](https://github.com/theotherwillembotha/nodered_prometheus) | `MetricsService` `MetricsConfigNode` `WebhookTemplate` | **Prometheus Metrics Config Node** (config) - hosts a `/metrics` scrape endpoint via a Webhook Server<br>**Counter Metric Config Node** (config) - named monotonic counter<br>**Gauge Metric Config Node** (config) - named up/down value gauge<br>**Timer Metric Config Node** (config) - named latency timer (Histogram or Summary mode) |
-| [@theotherwillembotha/node-red-zookeeper](https://github.com/theotherwillembotha/nodered_zookeeper) | `BaseNode` `ConfigNode` `LoggerTemplate` `StateConfigNode` | **ZooKeeper Server Config Node** (config) - shared ZooKeeper client connection<br>**ZooKeeper State Config Node** (config) - maps flow state names to ZooKeeper node values<br>**ZooKeeper Read Node** (flow) - reads a ZooKeeper node value on demand<br>**ZooKeeper Write Node** (flow) - writes a value to a ZooKeeper node<br>**ZooKeeper Subscribe Node** (flow) - emits a message each time a ZooKeeper node changes |
-| [@theotherwillembotha/node-red-circuitbreaker](https://github.com/theotherwillembotha/nodered_circuitbreaker) | `BaseNode` `ConfigNode` `LoggerTemplate` `MetricsTemplate` `StateTemplate` `ScriptEditorTemplate` | **Circuit Breaker Config Node** (config) - manages open/closed/half-open state with configurable fault detection and trip logic<br>**Fault Detector Config Node** (config) - user-defined TypeScript function that evaluates messages for faults<br>**Circuit Breaker Node** (flow) - routes messages based on current breaker state and emits state-change events |
-| [@theotherwillembotha/node-red-temporal](https://github.com/theotherwillembotha/nodered_temporal) | `BaseNode` `LoggerTemplate` | **Temporal Transform Node** (flow) - parses, adjusts, and formats date/time values across timezones using the TC39 Temporal API<br>**Temporal Duration Node** (flow) - computes the signed duration between two date/time values |
-| [@theotherwillembotha/node-red-whatsapp](https://github.com/theotherwillembotha/nodered_whatsapp) | `BaseNode` `ConfigNode` `LoggerTemplate` `WebhookTemplate` | **WhatsApp Config Node** (config) - manages a Baileys WhatsApp session (no cloud API or subscription required)<br>**WhatsApp Send Node** (flow) - sends a WhatsApp message from a flow<br>**WhatsApp Receive Node** (flow) - emits a message for each incoming WhatsApp message |
-| [@theotherwillembotha/node-red-nginxproxymanager](https://github.com/theotherwillembotha/nodered_nginxproxymanager) | `BaseNode` `ConfigNode` `LoggerTemplate` `UIHelperTemplate` | **Nginx Proxy Manager Config Node** (config) - shared connection to an Nginx Proxy Manager instance; registers as a reverse proxy provider for Webhook Server nodes<br>**Update Host Node** (flow) - creates or updates a proxy host entry<br>**Get Hosts Node** (flow) - retrieves the current list of proxy hosts, displayable via `PluginCore.dialog()` |
+**Scenario:** You are building a data-processing node. When something goes wrong — a malformed payload, a downstream API failure — you want structured log output with the node name, flow ID, and log level, routed to whichever log backend the user has configured (console, a REST endpoint, Grafana Loki). You do not want to hardcode a transport or force the user to reconfigure every node individually.
 
-Additional plugins will be listed here as they are published.
+The logger subsystem provides a `@Logger` property decorator that lazily resolves a named logger from a shared `LoggerConfigNode`. The user creates one logger config node (e.g. a _Console Logger_ or _Loki Logger_) and references it from each of their nodes. The concrete logger implementations live in separate packages (`node-red-logging`, `node-red-loki`) so your plugin has no transport dependency. If no logger is configured, `DoNothingAppender` silently absorbs all calls.
+
+**Building blocks involved:** Node, Config node (from `node-red-logging`), Template (`LoggerTemplate`)
+
+**Reference implementation:**
+
+`MyProcessorNode.ts`
+```typescript
+import { BaseNode, BaseNodeConfig, NodeDescription, onInput, Message }
+    from "@theotherwillembotha/node-red-plugincore";
+import { Logger }
+    from "@theotherwillembotha/node-red-plugincore";
+import { AbstractLogger, LoggerTemplateNodeConfig, LoggerTemplate, BasicTemplate }
+    from "@theotherwillembotha/node-red-plugincore";
+
+export interface MyProcessorNodeConfig extends BaseNodeConfig, LoggerTemplateNodeConfig {}
+
+@NodeDescription({
+    id:        "MyProcessorNode",
+    name:      "My Processor",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate, LoggerTemplate],
+})
+export class MyProcessorNode extends BaseNode<MyProcessorNodeConfig> {
+
+    @Logger()
+    private log!: AbstractLogger<any>;
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        try {
+            // do work ...
+            this.log.info("processed message");
+            this.node().send(message);
+        } catch (err: any) {
+            this.log.error(`processing failed: ${err.message}`);
+        }
+    }
+}
+```
+
+`MyProcessorNode.html`
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", { value: "My Processor", required: true })
+        .setLabel(function() { return this.name || "My Processor"; })
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:70%;" />
+    </div>
+    <!-- LoggerTemplate injects the logger selector automatically below -->
+</script>
+```
+
+> The `LoggerTemplate` injects a collapsible _Logging_ section into the editor form. The user enables logging, selects their logger config node, and optionally overrides the log template for this specific node. No HTML needed in your `.html` for the logger row itself.
 
 ---
 
-## Repository
+### Metrics
 
-- Source: [github.com/theotherwillembotha/nodered_plugincore](https://github.com/theotherwillembotha/nodered_plugincore)
-- Issues: [github.com/theotherwillembotha/nodered_plugincore/issues](https://github.com/theotherwillembotha/nodered_plugincore/issues)
+**Scenario:** You have a node that calls an external API. You want to count how many calls succeed and how many fail, and you want those counts visible in Prometheus or whatever metrics backend the user has set up — without coupling your node code to `prom-client` directly. If no metrics backend is configured, the counters should do nothing silently.
 
-## License
+The metrics subsystem provides `@Metrics` property decorators for counters, gauges, and timers. The user creates a metrics config node (from `node-red-prometheus`) and references it from your node. The `MetricsTemplate` injects the selector row. No backend dependency in your plugin.
 
-[ISC](LICENSE)
+**Building blocks involved:** Node, Config node (from `node-red-prometheus`), Template (`MetricsTemplate`), Decorators (`@Metrics`)
+
+**Reference implementation:**
+
+`MyApiNode.ts`
+```typescript
+import {
+    BaseNode, BaseNodeConfig, NodeDescription, onInput, Message,
+    Metrics, MetricType, MetricCollectorType, BucketType,
+    CounterMetric, MetricsTemplate, MetricsTemplateConfig, BasicTemplate,
+} from "@theotherwillembotha/node-red-plugincore";
+
+export interface MyApiNodeConfig extends BaseNodeConfig, MetricsTemplateConfig {}
+
+@NodeDescription({
+    id:        "MyApiNode",
+    name:      "My API",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate, MetricsTemplate],
+})
+export class MyApiNode extends BaseNode<MyApiNodeConfig> {
+
+    @Metrics({ name: "calls_success", type: MetricType.Counter, description: "Successful API calls" })
+    private success!: CounterMetric;
+
+    @Metrics({ name: "calls_error", type: MetricType.Counter, description: "Failed API calls" })
+    private errors!: CounterMetric;
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        try {
+            // call external API ...
+            this.success.increment();
+            this.node().send(message);
+        } catch (err) {
+            this.errors.increment();
+        }
+    }
+}
+```
+
+`MyApiNode.html`
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", { value: "My API", required: true })
+        .setLabel(function() { return this.name || "My API"; })
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:70%;" />
+    </div>
+    <!-- MetricsTemplate injects the metrics selector automatically -->
+</script>
+```
+
+> Timer metrics work the same way with `MetricType.Timer`. Use `MetricCollectorType.histogram` with `BucketType.default` for latency histograms, or `MetricCollectorType.summary` for quantile summaries.
+
+---
+
+### Webhook
+
+**Scenario:** You are integrating with a third-party service (a camera, a payment gateway, a CI system) that pushes events to a URL rather than waiting to be polled. You need an HTTP endpoint inside Node-RED that receives these POST requests, authenticates them, and injects them into the flow as messages. You also want Node-RED to automatically register that URL with an Nginx Proxy Manager instance so the endpoint is reachable from outside without manual DNS or proxy config.
+
+The webhook subsystem manages an Express HTTP server via `WebhookServerConfigNode`. Multiple webhook nodes can share one server on the same port. The `@Webhook` decorator registers a path+method combination and wires the request directly to a method on your node. The `WebhookTemplate` adds the server selector, path, auth config, and reverse-proxy table to your node's editor form.
+
+**Building blocks involved:** Node, Config node (`WebhookServerConfigNode`), Template (`WebhookTemplate`), Decorator (`@Webhook`)
+
+**Reference implementation:**
+
+`MyEventReceiverNode.ts`
+```typescript
+import {
+    BaseNode, BaseNodeConfig, NodeDescription, Message,
+    Webhook, EndpointMethodType,
+    WebhookTemplate, WebhookTemplateConfig, BasicTemplate,
+} from "@theotherwillembotha/node-red-plugincore";
+import { Request, Response } from "express";
+
+export interface MyEventReceiverNodeConfig extends BaseNodeConfig, WebhookTemplateConfig {}
+
+@NodeDescription({
+    id:        "MyEventReceiverNode",
+    name:      "My Event Receiver",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate, WebhookTemplate],
+})
+export class MyEventReceiverNode extends BaseNode<MyEventReceiverNodeConfig> {
+
+    @Webhook({ methods: [EndpointMethodType.POST] })
+    protected onWebhook(req: Request, res: Response): void {
+        const msg = { payload: req.body, headers: req.headers } as unknown as Message;
+        this.node().send(msg);
+        res.status(200).send({ ok: true });
+    }
+}
+```
+
+`MyEventReceiverNode.html`
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", { value: "My Event Receiver", required: true })
+        .setLabel(function() { return this.name || "My Event Receiver"; })
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:70%;" />
+    </div>
+    <!-- WebhookTemplate injects: server selector, path, auth method, reverse proxy table -->
+</script>
+```
+
+> The `WebhookServerConfigNode` is created by the user from the Config Nodes panel. They set the port once and all webhook nodes on the same server share it. The reverse proxy table in the editor form lets the user map a domain name to this endpoint via an Nginx Proxy Manager instance — plugincore creates and updates the proxy host entry automatically on each deploy.
+
+---
+
+### Secrets
+
+**Scenario:** Your node needs a database password or an API key to do its job. You could store it as a plain string in the flow, but that leaks credentials into the flow JSON and makes rotation painful. What you really want is a _reference_ to a secret — a key string that is resolved at runtime against whatever secrets backend the user has set up (OpenBao, AWS SSM, HashiCorp Vault). If no backend is configured, the value itself is the secret (a sensible default for simple deployments).
+
+The secrets subsystem provides a `SecretsTemplate` with a `PluginCore.initSecretField` helper that renders a secret field as either a password input (when only the built-in `NullSecretsProvider` is available) or a `typedInput` selector (when external providers are configured). The user creates provider instances from the **Secrets** sidebar (🔑 tab). At runtime, `SecretsService.resolve()` looks up the value via the selected provider. Provider implementations live in separate packages; `NullSecretsProvider` is always present as a fallback.
+
+**Building blocks involved:** Node, Config node (`SecretProviderConfigNode`, from an external provider package), Template (`SecretsTemplate`), Service (`SecretsService`)
+
+**Reference implementation:**
+
+`MyDatabaseNode.ts`
+```typescript
+import {
+    BaseNode, BaseNodeConfig, NodeDescription, onInput, Message,
+    SecretsTemplate, SecretsService, BasicTemplate,
+} from "@theotherwillembotha/node-red-plugincore";
+
+export interface MyDatabaseNodeConfig extends BaseNodeConfig {
+    dbPassword:         string;   // the key string (or literal value for NullProvider)
+    dbPasswordProvider: string;   // the config node ID of the selected provider
+    host: string;
+}
+
+@NodeDescription({
+    id:        "MyDatabaseNode",
+    name:      "My Database",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate, SecretsTemplate],
+})
+export class MyDatabaseNode extends BaseNode<MyDatabaseNodeConfig> {
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        const config = this.config();
+        const password = await SecretsService.resolve(
+            config.dbPasswordProvider,
+            config.dbPassword
+        );
+        // use password to connect ...
+        this.node().send(message);
+    }
+}
+```
+
+`MyDatabaseNode.html`
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name",               { value: "My Database", required: true })
+        .addDefault("host",               { value: "", required: true })
+        .addDefault("dbPassword",         { value: "" })
+        .addDefault("dbPasswordProvider", { value: "__null__",
+                                            type: "DelegatedConfigReferenceNode" })
+        .setLabel(function() { return this.name || "My Database"; })
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditPrepare">
+{
+    PluginCore.initSecretField("node-input-dbPassword", {
+        node:          this,
+        valueField:    "dbPassword",
+        providerField: "dbPasswordProvider",
+        hideValue:     true,
+    });
+}
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditSave">
+{
+    var secret = PluginCore.readSecretField("node-input-dbPassword");
+    this.dbPassword         = secret.value;
+    this.dbPasswordProvider = secret.provider;
+    PluginCore.destroySecretField("node-input-dbPassword");
+}
+</script>
+
+<script type="text/javascript" template-section="onIncludeEditCancel">
+{
+    PluginCore.destroySecretField("node-input-dbPassword");
+}
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:70%;" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-host"><i class="fa fa-server"></i> Host</label>
+        <input type="text" id="node-input-host" style="width:70%;" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-dbPassword"><i class="fa fa-key"></i> Password</label>
+        <input type="text" id="node-input-dbPassword" style="width:70%;" />
+    </div>
+</script>
+```
+
+> `PluginCore.initSecretField` renders the field as a plain password input when only `NullSecretsProvider` is available, or as a `typedInput` selector (showing shortcode badges like `local 🔒`, `prod 🔑`) when external providers are deployed. The node stores both the key string and the provider ID, and `SecretsService.resolve()` handles the lookup at runtime.
+>
+> The `SecretsLookupNode` (included in plugincore) is a ready-made single-purpose node that does nothing but resolve a secret and place the result on `msg.payload`. Use it to test your provider configuration before wiring it into a more complex flow.
+
+---
+
+### Templating
+
+**Scenario:** You are building a notification node that formats outgoing messages — email bodies, Slack messages, alert texts. The format should be user-configurable with a template string, not hardcoded. Different users prefer different template engines: some are happy with `{{payload}}` (Mustache), others need Handlebars helpers. You want to offer a template field in the editor and let the user (or admin) choose the engine, without coupling your node to any specific template library.
+
+The templating subsystem provides a `TemplatingTemplate` that adds a template editor and engine selector to your node's form. At runtime, `TemplatingService.get(providerName)` returns the selected engine and `provider.evaluate(template, context)` renders the string. The built-in `MustacheTemplatingProvider` is always available. Handlebars and others can be added via separate provider packages.
+
+**Building blocks involved:** Node, Config node (`TemplatingProviderConfigNode`, from an optional provider package), Template (`TemplatingTemplate`), Service (`TemplatingService`)
+
+**Reference implementation:**
+
+`MyNotificationNode.ts`
+```typescript
+import {
+    BaseNode, BaseNodeConfig, NodeDescription, onInput, Message,
+    TemplatingTemplate, TemplatingTemplateNodeConfig,
+    TemplatingService, BasicTemplate,
+} from "@theotherwillembotha/node-red-plugincore";
+
+export interface MyNotificationNodeConfig
+    extends BaseNodeConfig, TemplatingTemplateNodeConfig {}
+
+@NodeDescription({
+    id:        "MyNotificationNode",
+    name:      "My Notification",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate, TemplatingTemplate],
+})
+export class MyNotificationNode extends BaseNode<MyNotificationNodeConfig> {
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        const config   = this.config();
+        const provider = TemplatingService.get(config.templatingProvider);
+        const text     = provider.evaluate(config.templateContent || '', message as object);
+
+        // send text to Slack, email, etc. ...
+        message.payload = text;
+        this.node().send(message);
+    }
+}
+```
+
+`MyNotificationNode.html`
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name", { value: "My Notification", required: true })
+        .setLabel(function() { return this.name || "My Notification"; })
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:70%;" />
+    </div>
+    <!-- TemplatingTemplate injects: engine selector + template editor -->
+</script>
+```
+
+> The `TemplatingTemplate` injects a full Ace-based template editor and an engine selector into your node's form. The `TemplatingNode` (included in plugincore) is a ready-made standalone node for ad hoc template evaluation — use it to verify that your template strings produce the expected output before wiring them into a notification node.
+
+---
+
+### State
+
+**Scenario:** You are building a rate-limiter node. It needs to remember how many messages passed through in the last minute, and that counter must survive a Node-RED redeploy (flow save + restart) but reset on a full Node-RED process restart. You want that behaviour to be configurable per-node without each node reimplementing its own persistence logic.
+
+The state subsystem provides a `StateTemplate` that adds a state configuration section to your node's form. Each node gets a `StateHandle` with `get()`, `set()`, and `clear()` methods. The user chooses whether state survives redeployment and/or process restarts. The built-in `InternalStateConfigNode` stores state in memory (with optional file-backed persistence). External providers can be added via separate packages.
+
+**Building blocks involved:** Node, Config node (`InternalStateConfigNode`, auto-created on first open), Template (`StateTemplate`)
+
+**Reference implementation:**
+
+`MyRateLimiterNode.ts`
+```typescript
+import {
+    BaseNode, BaseNodeConfig, NodeDescription, onInput, Message,
+    StateTemplate, StateTemplateNodeConfig,
+    StateService, StateHandle, BasicTemplate,
+} from "@theotherwillembotha/node-red-plugincore";
+
+export interface MyRateLimiterNodeConfig
+    extends BaseNodeConfig, StateTemplateNodeConfig {
+    limit: number;
+}
+
+@NodeDescription({
+    id:        "MyRateLimiterNode",
+    name:      "My Rate Limiter",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate, StateTemplate],
+})
+export class MyRateLimiterNode extends BaseNode<MyRateLimiterNodeConfig> {
+
+    private _state!: StateHandle;
+
+    constructor(node: any, config: MyRateLimiterNodeConfig) {
+        super(node, config);
+        this._state = StateService.get(config);
+        // Seed counter to zero if this is the first time the node has run.
+        if (this._state.get() === null) this._state.set("0");
+    }
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        const count = parseInt(this._state.get() ?? "0", 10) + 1;
+        this._state.set(String(count));
+
+        if (count > this.config().limit) {
+            // drop message — rate limit exceeded
+            return;
+        }
+        this.node().send(message);
+    }
+}
+```
+
+`MyRateLimiterNode.html`
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("name",  { value: "My Rate Limiter", required: true })
+        .addDefault("limit", { value: 100, required: true })
+        .setLabel(function() { return this.name || "My Rate Limiter"; })
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" style="width:70%;" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-limit"><i class="fa fa-tachometer"></i> Limit</label>
+        <input type="number" id="node-input-limit" style="width:70%;" />
+    </div>
+    <!-- StateTemplate injects: state provider selector + persistence options -->
+</script>
+```
+
+> The `InternalStateConfigNode` is created automatically the first time the node editor is opened — the user does not need to create it manually. The state template adds a collapsible _State_ section where the user can choose whether the counter survives redeployment and/or a full restart.
+
+---
+
+## Extensible subsystems — abstract types and backend services
+
+Each shared subsystem described above is split across three layers. Understanding this split is what makes it possible to build a node that uses structured logging without depending on Winston, or one that emits metrics without depending on `prom-client`.
+
+### The problem this solves
+
+If your node imported `winston` directly, every plugin that uses your node would pull Winston into their bundle whether they wanted it or not. If the user then installed a Loki plugin, they would have two separate Winston instances with no shared configuration. And if they ever wanted to swap the transport, they would have to touch every node individually.
+
+The abstract-type pattern inverts this dependency. Your node only knows about an interface (`AbstractLogger`, `MetricsContainer`, `StateHandle`, `SecretsProvider`). The concrete implementation — which knows about Winston, `prom-client`, OpenBao, or Zookeeper — lives in a separate package. plugincore provides a silent `DoNothing*` fallback for every interface, so your node degrades gracefully when no backend is installed.
+
+```
+plugincore (this package)
+  └── defines AbstractLogger, LoggerConfigNode (abstract)
+  └── DoNothingAppender — silent fallback, always present
+
+node-red-logging (separate package, installed by user)
+  └── ConsoleLoggerConfigNode extends LoggerConfigNode
+  └── RestLoggerConfigNode    extends LoggerConfigNode
+
+node-red-loki (separate package, installed by user)
+  └── LokiLoggerConfigNode    extends LoggerConfigNode
+
+Your plugin
+  └── @Logger() — resolves whichever LoggerConfigNode the user picked
+                   falls back to DoNothingAppender if none is configured
+```
+
+Your node does not import `node-red-logging` or `node-red-loki`. At deploy time, `@Logger()` calls `RED.nodes.getNode(config.loggerReference)` and gets back whatever concrete config node the user configured.
+
+### Abstract base classes
+
+Each subsystem defines an abstract base class for its config node. The base class is **not decorated with `@NodeDescription`** — it is never registered as a Node-RED type. It exists only to be extended. The constructor handles all the lifecycle work (registration, close hooks) so the concrete subclass only needs to implement one method.
+
+| Subsystem | Abstract config node base | Method to implement | Fallback |
+|---|---|---|---|
+| Logger | `LoggerConfigNode<C, L>` | `logger(): AbstractLogger<C>` | `DoNothingAppender` |
+| Metrics | `MetricsConfigNode` | `createContainer(config): MetricsContainer` | `DoNothingMetricsContainer` |
+| State | `StateConfigNode` | `createHandle(): StateHandle` | `DoNothingStateHandle` |
+| Secrets | `SecretProviderConfigNode` | `resolve(key): Promise<string>` | `NullSecretsProvider` |
+| Templating | _(provider, not a config node — see below)_ | `evaluate(template, context): string` | `DoNothingTemplatingProvider` |
+
+### How to implement a provider — Logger as the full example
+
+Here is what implementing a new logger backend looks like. The pattern is the same for every subsystem.
+
+**`ConsoleLoggerConfigNode.ts`** (in `node-red-logging`)
+```typescript
+import {
+    LoggerConfigNode, LoggerConfigNodeConfig, AbstractLogger,
+    LoggerTemplateConfig, Log, NodeDescription, ConfigNode,
+} from "@theotherwillembotha/node-red-plugincore";
+
+// 1. Define your config interface
+export interface ConsoleLoggerConfig extends LoggerConfigNodeConfig {
+    level: string;
+    template: string;
+}
+
+// 2. Implement the concrete logger (the thing that actually writes)
+class ConsoleLogger extends AbstractLogger<ConsoleLoggerConfig> {
+    protected createLogger(config: LoggerTemplateConfig): Log {
+        return new ConsoleLog(config);
+    }
+}
+
+// 3. Decorate and extend the abstract config node
+@NodeDescription({
+    id:    "ConsoleLoggerConfigNode",
+    name:  "Console Logger",
+    group: "config",
+    package: "@yourscope/node-red-logging",
+    tags: ["LoggerType"],           // ← makes this discoverable as a logger backend
+})
+export class ConsoleLoggerConfigNode
+    extends LoggerConfigNode<ConsoleLoggerConfig, ConsoleLogger> {
+
+    constructor(node: Node, config: ConsoleLoggerConfig) {
+        super(node, config);
+    }
+
+    protected logger(): ConsoleLogger {
+        return new ConsoleLogger(this.config());
+    }
+}
+```
+
+The `tags: ["LoggerType"]` annotation is what allows the **Logger selector** in every node's editor form to find this config node type. `NodeTypeService` maintains the tag index server-side; the client calls `GET /nodetypeservice/find?tag=LoggerType` to get the list of available logger types.
+
+### The Templating subsystem — a provider, not a config node
+
+Templating providers are slightly different from the other subsystems. Rather than extending a config node base, a templating provider is a plain class that implements a single-method interface:
+
+```typescript
+export interface TemplatingProvider {
+    evaluate(template: string, context: object): string;
+}
+```
+
+Providers are registered programmatically from a service's `init()` method via `TemplatingService.registerProvider()`, not through a config node. This is because template engines are stateless — there is no per-instance configuration to store. The user selects a provider once per node from the engine dropdown; no config node is created.
+
+```typescript
+// Inside your provider package's service init():
+TemplatingService.registerProvider("HandlebarsTemplatingProvider",
+    new HandlebarsTemplatingProvider());
+```
+
+The client discovers available providers via `GET /providerregistry/find?type=TemplatingProvider`.
+
+### Backend services and their HTTP endpoints
+
+The backend services are the server-side glue that makes the editor UI work. Each one runs in the Node-RED process and exposes one or more `httpAdmin` endpoints that the client-side templates call.
+
+| Service | Endpoint | What the client uses it for |
+|---|---|---|
+| `NodeTypeService` | `GET /nodetypeservice/find?tag=<tag>` | Discovers all registered node types with a given tag. Used by Logger/Metrics/State/Secrets selectors to populate their type dropdowns. |
+| `ProviderRegistry` | `GET /providerregistry/find?type=<category>` | Discovers non-node providers (e.g. templating engines) registered programmatically. |
+| `TemplatingService` | `GET /templatingservice/providers` | Lists available template engines for the engine selector. |
+| `MetricsService` | _(global store, no HTTP endpoint)_ | Keeps `MetricsContainer` instances alive across redeployments so counters are not reset when a flow is saved. |
+| `SecretsService` | `GET /secretsservice/instances` | Returns all currently-deployed secret provider instances (shortcode, name, type). Used by `initSecretField` to build the type selector and by the Secrets sidebar. |
+| `StateService` | _(global store, no HTTP endpoint)_ | Manages per-node `StateHandle` instances and factory registrations. |
+| `LoggerService` | _(no HTTP endpoint)_ | Shared entry point for `DoNothingAppender`; `@Logger()` resolves the logger config node directly via `RED.nodes.getNode()`. |
+
+### Cross-bundle safety
+
+Because each plugin bundles its own copy of plugincore via esbuild, there can be multiple copies of `MetricsService` or `SecretsService` loaded at runtime. If each copy kept state in a module-level variable, registrations from one bundle would be invisible to another.
+
+Every service that holds shared state stores it on `global` under a fixed key instead:
+
+```typescript
+private static get _instances() {
+    if (!(global as any).__plugincore_secrets_instances__) {
+        (global as any).__plugincore_secrets_instances__ = new Map();
+    }
+    return (global as any).__plugincore_secrets_instances__;
+}
+```
+
+This means the first bundle to initialize a service creates the backing store; every subsequent bundle finds it already there and uses the same map. Provider registrations, metric containers, state handles, and secret provider instances are all shared correctly regardless of which bundle wrote them.
+
+---
+
+## Writing your first node
+
+A minimal flow node — no subsystems, just a message handler:
+
+**`src/myplugin/node/HelloNode.ts`**
+```typescript
+import { BaseNode, BaseNodeConfig, NodeDescription, onInput, Message }
+    from "@theotherwillembotha/node-red-plugincore";
+import { BasicTemplate } from "@theotherwillembotha/node-red-plugincore";
+
+export interface HelloNodeConfig extends BaseNodeConfig {
+    greeting: string;
+}
+
+@NodeDescription({
+    id:        "HelloNode",
+    name:      "Hello",
+    group:     "myplugin",
+    package:   "@yourscope/node-red-myplugin",
+    templates: [BasicTemplate],
+})
+export class HelloNode extends BaseNode<HelloNodeConfig> {
+
+    @onInput()
+    protected async messageReceived(message: Message): Promise<void> {
+        message.payload = this.config().greeting || "Hello, world!";
+        this.node().send(message);
+    }
+}
+```
+
+**`src/myplugin/node/HelloNode.html`**
+```html
+<script type="text/javascript" template-section="onCompose">
+    node
+        .addDefault("greeting", { value: "Hello, world!", required: true })
+        .setLabel(function() { return this.greeting || "Hello"; })
+</script>
+
+<script type="text/html" template-section="onIncludeEditForm">
+    <div class="form-row">
+        <label for="node-input-greeting">Greeting</label>
+        <input type="text" id="node-input-greeting" placeholder="Hello, world!" style="width:70%;" />
+    </div>
+</script>
+```
+
+Register it in `GenerateNodes.ts`:
+
+```typescript
+import { NodeGenerator, NodeTypeService } from "@theotherwillembotha/node-red-plugincore";
+import { HelloNode } from "./myplugin/node/HelloNode.js";
+
+new NodeGenerator("./src/")
+    .registerService(NodeTypeService)
+    .registerNode(HelloNode)
+    .generate("./build/Nodes", "./build/Plugins", "@yourscope/node-red-myplugin");
+
+process.exit(0);
+```
+
+Rebuild and reload Node-RED — your node will appear in the palette under the `myplugin` category.
+
+---
+
+## Publishing
+
+Before publishing to npm and the [Node-RED Flow Library](https://flows.nodered.org/add/node):
+
+- [ ] `package.json` `keywords` includes `"node-red"` and any relevant technology tags
+- [ ] `package.json` specifies minimum Node-RED version under `engines.nodered`
+- [ ] Each node has a populated `onIncludeDocumentation` section in its HTML
+- [ ] `README.md` describes prerequisites and basic usage
+- [ ] Build passes cleanly (`npm run build` with no errors)
+- [ ] No test/demo nodes left in `GenerateNodes.ts`
+
+```bash
+npm publish
+```
+
+Then submit manually at https://flows.nodered.org/add/node.
